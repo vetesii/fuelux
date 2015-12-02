@@ -4,7 +4,7 @@
 
 define(function (require) {
 	var $ = require('jquery');
-	var html = require('text!test/markup/wizard-markup.html');
+	var html = require('text!test/markup/wizard-markup.html!strip');
 
 	require('bootstrap');
 	require('fuelux/wizard');
@@ -282,10 +282,10 @@ define(function (require) {
 			label: 'Test1',
 			pane: 'Test Pane Content 1'
 		}, {
-				badge: 'T2',
-				label: 'Test2',
-				pane: 'Test Pane Content 2'
-			});
+			badge: 'T2',
+			label: 'Test2',
+			pane: 'Test Pane Content 2'
+		});
 		$test = $wizard.find('.steps li:nth-child(2)');
 		equal($test.find('.badge').text(), 'T1', 'item correctly added at index via arguments, has correct badge');
 		$test = $test.next();

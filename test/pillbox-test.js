@@ -4,7 +4,7 @@
 
 define(function(require) {
 	var $ = require('jquery');
-	var html = require('text!test/markup/pillbox-markup.html');
+	var html = require('text!test/markup/pillbox-markup.html!strip');
 
 	require('bootstrap');
 	require('fuelux/pillbox');
@@ -32,6 +32,12 @@ define(function(require) {
 			text: 'Item 1',
 			value: 'foo'
 		}, 'pillbox returns item data');
+	});
+
+	test('getValue alias should function', function() {
+		var $pillbox = $(html).find('#MyPillbox').pillbox();
+
+		deepEqual($pillbox.pillbox('items'), $pillbox.pillbox('getValue'), 'getValue aliases items');
 	});
 
 	test('Input functionality should behave as designed', function() {

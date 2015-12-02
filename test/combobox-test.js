@@ -4,7 +4,7 @@
 
 define(function(require){
 	var $ = require('jquery');
-	var html = require('text!test/markup/combobox-markup.html');
+	var html = require('text!test/markup/combobox-markup.html!strip');
 	/* FOR DEV TESTING - uncomment to test against index.html */
 	//html = require('text!index.html!strip');
 	html = $('<div>'+html+'</div>').find('#MyComboboxContainer');
@@ -21,6 +21,11 @@ define(function(require){
 	test("should return element", function () {
 		var $combobox = $(html).find("#MyCombobox");
 		ok($combobox.combobox() === $combobox , 'combobox should be initialized');
+	});
+
+	test("should disable dropdown menu if no items exists", function () {
+		var $combobox = $(html).find('#MyComboboxSingleItem').combobox();
+		equal($combobox.find('.btn').hasClass('disabled'), true, 'dropdown disabled');
 	});
 
 	test("should set disabled state", function () {
@@ -49,6 +54,24 @@ define(function(require){
 		var item = $combobox.combobox('selectedItem');
 		var expectedItem = { text: '' };
 		deepEqual(item, expectedItem, 'no item selected');
+	});
+
+	test("should return selectedItem", function () {
+		var $combobox = $(html).find("#MyCombobox").combobox();
+		$combobox.combobox('selectByIndex', 0);
+
+		var item = $combobox.combobox('selectedItem');
+		var expectedItem = { text: 'One', value: 1 };
+		deepEqual(item, expectedItem, 'selectedItem returns expected value');
+	});
+
+	test("should return selectedItem", function () {
+		var $combobox = $(html).find("#MyCombobox").combobox();
+		$combobox.combobox('selectByIndex', 0);
+
+		var item1 = $combobox.combobox('selectedItem');
+		var item2 = $combobox.combobox('getValue');
+		deepEqual(item1, item2, 'getValue alias matches selectedItem');
 	});
 
 	test("should select by index", function () {

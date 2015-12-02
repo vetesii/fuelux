@@ -4,7 +4,7 @@
 
 define(function(require){
 	var $ = require('jquery');
-	var html = require('text!test/markup/repeater-markup.html');
+	var html = require('text!test/markup/repeater-markup.html!strip');
 	/* FOR DEV TESTING - uncomment to test against index.html */
 	//html = require('text!index.html!strip');
 	//html = $('<div>'+html+'</div>').find('#MyRepeaterContainer');
@@ -329,7 +329,7 @@ define(function(require){
 				equal($search.hasClass(disabled), false, 'repeater search enabled as expected');
 				equal($filters.hasClass(disabled), false, 'repeater filters enabled as expected');
 				equal($views.attr(disabled), undefined, 'repeater views enabled as expected');
-				equal($pageSize.hasClass(disabled), false, 'repeater pageSize enabled as expected');
+				equal($pageSize.hasClass(disabled), true, 'repeater pageSize disabled as expected');
 				equal($primaryPaging.hasClass(disabled), false, 'repeater primaryPaging enabled as expected');
 				equal($secondaryPaging.attr(disabled), undefined, 'repeater secondaryPaging enabled as expected');
 				equal($prevBtn.attr(disabled), disabled, 'repeater prevBtn still disabled as expected (no more pages)');

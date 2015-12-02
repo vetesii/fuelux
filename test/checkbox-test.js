@@ -4,7 +4,7 @@
 
 define(function(require){
 	var $ = require('jquery');
-	var html = require('text!test/markup/checkbox-markup.html');
+	var html = require('text!test/markup/checkbox-markup.html!strip');
 	/* FOR DEV TESTING - uncomment to test against index.html */
 	//html = require('text!index.html!strip');
 	html = $('<div>'+html+'</div>').find('#MyCheckboxContainer');
@@ -173,6 +173,20 @@ define(function(require){
 		// verify checked state changes with check method
 		$chk.checkbox('check');
 		equal($chk.checkbox('isChecked'), true, 'checkbox state is checked');
+	});
+
+	test("should support getValue alias", function () {
+		var $element = $(html).find('#CheckboxCheckedEnabled').clone();
+		var $input = $element.find('input[type="checkbox"]');
+
+		// initialize checkbox
+		var $chk = $element.find('label').checkbox();
+		// verify alias aliases
+		equal($chk.checkbox('isChecked'), $chk.checkbox('getValue'), 'getValue alias matches isChecked');
+		$chk.checkbox('toggle');
+		equal($chk.checkbox('isChecked'), $chk.checkbox('getValue'), 'getValue alias matches isChecked');
+		$chk.checkbox('toggle');
+		equal($chk.checkbox('isChecked'), $chk.checkbox('getValue'), 'getValue alias matches isChecked');
 	});
 
 	test("should trigger checked event when calling check method", function () {

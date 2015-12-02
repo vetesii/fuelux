@@ -15,6 +15,12 @@ validation-status.json
 # Sauce Labs. because it's classified...
 SAUCE_API_KEY.yml
 
+# Fuel CDN Login. because it's classified...
+FUEL_CDN.yml
+
+# Generated file from commonjs-test.js
+test/commonjs-bundle.js
+
 # Editors / IDEs
 .idea
 
@@ -36,10 +42,13 @@ dist/css/fuelux-dev.css.map
 dist/css/fuelux-fuelux-no-namespace.css.map
 
 # generate release notes
-notes.sh 
+notes.sh
 
 # release task and commit
 stage.sh
 
 # push major branch, the version tag, and SFTP upload to CDN
 publish.sh
+
+# github token
+GITHUB_TOKEN.json

@@ -1,5 +1,5 @@
 /*!
- * Fuel UX v3.7.1 
+ * Fuel UX v3.12.0 
  * Copyright 2012-2015 ExactTarget
  * Licensed under the BSD-3-Clause license (https://github.com/ExactTarget/fuelux/blob/master/LICENSE)
  */
@@ -43,194 +43,134 @@
 		var Checkbox = function( element, options ) {
 			this.options = $.extend( {}, $.fn.checkbox.defaults, options );
 
+			if ( element.tagName.toLowerCase() !== 'label' ) {
+				//console.log('initialize checkbox on the label that wraps the checkbox');
+				return;
+			}
+
 			// cache elements
-			this.$element = $( element ).is( 'input[type="checkbox"]' ) ? $( element ) : $( element ).find( 'input[type="checkbox"]:first' );
-			this.$label = this.$element.parent();
-			this.$parent = this.$label.parent( '.checkbox' );
-			this.$toggleContainer = this.$element.attr( 'data-toggle' );
-			this.state = {
-				disabled: false,
-				checked: false
-			};
+			this.$label = $( element );
+			this.$chk = this.$label.find( 'input[type="checkbox"]' );
+			this.$container = $( element ).parent( '.checkbox' ); // the container div
 
-			if ( this.$parent.length === 0 ) {
-				this.$parent = null;
-			}
+			// determine if a toggle container is specified
+			var containerSelector = this.$chk.attr( 'data-toggle' );
+			this.$toggleContainer = $( containerSelector );
 
-			if ( Boolean( this.$toggleContainer ) ) {
-				this.$toggleContainer = $( this.$toggleContainer );
-			} else {
-				this.$toggleContainer = null;
-			}
-
-			// handle events
-			this.$element.on( 'change.fu.checkbox', $.proxy( this.itemchecked, this ) );
-			this.$label.unbind( 'click', $.proxy( this.toggle, this ) ); //unbind previous binds so that double clickage doesn't happen (thus making checkbox appear to not work)
-			this.$label.on( 'click', $.proxy( this.toggle, this ) ); //make repeated label clicks work
+			// handle internal events
+			this.$chk.on( 'change', $.proxy( this.itemchecked, this ) );
 
 			// set default state
-			this.setState();
+			this.setInitialState();
 		};
 
 		Checkbox.prototype = {
 
 			constructor: Checkbox,
 
-			setState: function( $chk ) {
-				$chk = $chk || this.$element;
+			setInitialState: function() {
+				var $chk = this.$chk;
+				var $lbl = this.$label;
 
-				this.state.disabled = Boolean( $chk.prop( 'disabled' ) );
-				this.state.checked = Boolean( $chk.is( ':checked' ) );
+				// get current state of input
+				var checked = $chk.prop( 'checked' );
+				var disabled = $chk.prop( 'disabled' );
 
-				this._resetClasses();
-
-				// set state of checkbox
-				this._toggleCheckedState();
-				this._toggleDisabledState();
-
-				//toggle container
-				this.toggleContainer();
+				// sync label class with input state
+				this.setCheckedState( $chk, checked );
+				this.setDisabledState( $chk, disabled );
 			},
 
-			enable: function() {
-				this.state.disabled = false;
-				this.$element.removeAttr( 'disabled' );
-				this.$element.prop( 'disabled', false );
-				this._resetClasses();
-				this.$element.trigger( 'enabled.fu.checkbox' );
+			setCheckedState: function( element, checked ) {
+				var $chk = element;
+				var $lbl = this.$label;
+				var $container = this.$container;
+				var $containerToggle = this.$toggleContainer;
+
+				// set class on outer container too...to support highlighting
+				// TODO: verify inline checkboxes, also test with MCTheme
+
+				if ( checked ) {
+					$chk.prop( 'checked', true );
+					$lbl.addClass( 'checked' );
+					//$container.addClass('checked');
+					$containerToggle.removeClass( 'hide hidden' );
+					$lbl.trigger( 'checked.fu.checkbox' );
+				} else {
+					$chk.prop( 'checked', false );
+					$lbl.removeClass( 'checked' );
+					//$container.removeClass('checked');
+					$containerToggle.addClass( 'hidden' );
+					$lbl.trigger( 'unchecked.fu.checkbox' );
+				}
+
+				$lbl.trigger( 'changed.fu.checkbox', checked );
 			},
 
-			disable: function() {
-				this.state.disabled = true;
-				this.$element.prop( 'disabled', true );
-				this.$element.attr( 'disabled', 'disabled' );
-				this._setDisabledClass();
-				this.$element.trigger( 'disabled.fu.checkbox' );
+			setDisabledState: function( element, disabled ) {
+				var $chk = element;
+				var $lbl = this.$label;
+
+				if ( disabled ) {
+					this.$chk.prop( 'disabled', true );
+					$lbl.addClass( 'disabled' );
+					$lbl.trigger( 'disabled.fu.checkbox' );
+				} else {
+					this.$chk.prop( 'disabled', false );
+					$lbl.removeClass( 'disabled' );
+					$lbl.trigger( 'enabled.fu.checkbox' );
+				}
+			},
+
+			itemchecked: function( evt ) {
+				var $chk = $( evt.target );
+				var checked = $chk.prop( 'checked' );
+
+				this.setCheckedState( $chk, checked );
+			},
+
+			toggle: function() {
+				var checked = this.isChecked();
+
+				if ( checked ) {
+					this.uncheck();
+				} else {
+					this.check();
+				}
 			},
 
 			check: function() {
-				this.state.checked = true;
-				this.$element.prop( 'checked', true );
-				this.$element.attr( 'checked', 'checked' );
-				this._setCheckedClass();
-				this.$element.trigger( 'checked.fu.checkbox' );
+				this.setCheckedState( this.$chk, true );
 			},
 
 			uncheck: function() {
-				this.state.checked = false;
-				this.$element.prop( 'checked', false );
-				this.$element.removeAttr( 'checked' );
-				this._resetClasses();
-				this.$element.trigger( 'unchecked.fu.checkbox' );
+				this.setCheckedState( this.$chk, false );
 			},
 
 			isChecked: function() {
-				return this.state.checked;
+				var checked = this.$chk.prop( 'checked' );
+				return checked;
 			},
 
-			toggle: function( e ) {
-				//keep checkbox from being used if it is disabled. You can't rely on this.state.disabled, because on bind time it might not be disabled, but, state.disabled may be set to true after bind time (and this.state.disabled won't be updated for this bound instance)
-				//To see how this works, uncomment the next line of code and go to http://0.0.0.0:8000/index.html click the "disable #myCustomCheckbox1" and then click on the first checkbox and see the disparity in the output between this.state and this.$element.attr
-				//console.log('is disabled? this.state says, "' + this.state.disabled + '"; this.$element.attr says, "' + this.$element.attr('disabled') + '"');
-				if ( /* do not change this to this.state.disabled. It will break edge cases */ this.$element.prop( 'disabled' ) ) {
-					return;
-				}
-
-				//keep event from firing twice in Chrome
-				if ( !e || ( e.target === e.originalEvent.target ) ) {
-					this.state.checked = !this.state.checked;
-
-					this._toggleCheckedState();
-
-					if ( Boolean( e ) ) {
-						//stop bubbling, otherwise event fires twice in Firefox.
-						e.preventDefault();
-						//make change event still fire (prevented by preventDefault to avoid firefox bug, see preceeding line)
-						this.$element.trigger( 'change', e );
-					}
-
-				}
+			enable: function() {
+				this.setDisabledState( this.$chk, false );
 			},
 
-			toggleContainer: function() {
-				if ( Boolean( this.$toggleContainer ) ) {
-					if ( this.state.checked ) {
-						this.$toggleContainer.removeClass( 'hide hidden' );
-						this.$toggleContainer.attr( 'aria-hidden', 'false' );
-					} else {
-						this.$toggleContainer.addClass( 'hidden' );
-						this.$toggleContainer.attr( 'aria-hidden', 'true' );
-					}
-
-				}
-			},
-
-			itemchecked: function( element ) {
-				this.setState( $( element.target ) );
+			disable: function() {
+				this.setDisabledState( this.$chk, true );
 			},
 
 			destroy: function() {
-				this.$parent.remove();
+				this.$label.remove();
 				// remove any external bindings
 				// [none]
 				// empty elements to return to original markup
 				// [none]
-				return this.$parent[ 0 ].outerHTML;
-			},
-
-			_resetClasses: function() {
-				var classesToRemove = [];
-
-				if ( !this.state.checked ) {
-					classesToRemove.push( 'checked' );
-				}
-
-				if ( !this.state.disabled ) {
-					classesToRemove.push( 'disabled' );
-				}
-
-				classesToRemove = classesToRemove.join( ' ' );
-
-				this.$label.removeClass( classesToRemove );
-
-				if ( this.$parent ) {
-					this.$parent.removeClass( classesToRemove );
-				}
-			},
-
-			_toggleCheckedState: function() {
-				if ( this.state.checked ) {
-					this.check();
-				} else {
-					this.uncheck();
-				}
-			},
-
-			_toggleDisabledState: function() {
-				if ( this.state.disabled ) {
-					this.disable();
-				} else {
-					this.enable();
-				}
-			},
-
-			_setCheckedClass: function() {
-				this.$label.addClass( 'checked' );
-
-				if ( this.$parent ) {
-					this.$parent.addClass( 'checked' );
-				}
-			},
-
-			_setDisabledClass: function() {
-				this.$label.addClass( 'disabled' );
-
-				if ( this.$parent ) {
-					this.$parent.addClass( 'disabled' );
-				}
+				return this.$label[ 0 ].outerHTML;
 			}
 		};
 
+		Checkbox.prototype.getValue = Checkbox.prototype.isChecked;
 
 		// CHECKBOX PLUGIN DEFINITION
 
@@ -267,7 +207,7 @@
 		// DATA-API
 
 		$( document ).on( 'mouseover.fu.checkbox.data-api', '[data-initialize=checkbox]', function( e ) {
-			var $control = $( e.target ).closest( '.checkbox' ).find( '[type=checkbox]' );
+			var $control = $( e.target );
 			if ( !$control.data( 'fu.checkbox' ) ) {
 				$control.checkbox( $control.data() );
 			}
@@ -275,7 +215,7 @@
 
 		// Must be domReady for AMD compatibility
 		$( function() {
-			$( '[data-initialize=checkbox] [type=checkbox]' ).each( function() {
+			$( '[data-initialize=checkbox]' ).each( function() {
 				var $this = $( this );
 				if ( !$this.data( 'fu.checkbox' ) ) {
 					$this.checkbox( $this.data() );
@@ -321,6 +261,13 @@
 
 			// set default selection
 			this.setDefaultSelection();
+
+			// if dropdown is empty, disable it
+			var items = this.$dropMenu.children( 'li' );
+			if ( items.length === 0 ) {
+				this.$button.addClass( 'disabled' );
+			}
+
 		};
 
 		Combobox.prototype = {
@@ -474,6 +421,7 @@
 			}
 		};
 
+		Combobox.prototype.getValue = Combobox.prototype.selectedItem;
 
 		// COMBOBOX PLUGIN DEFINITION
 
@@ -610,12 +558,11 @@
 
 			this.$calendar.find( '.datepicker-today' ).on( 'click.fu.datepicker', $.proxy( this.todayClicked, this ) );
 			this.$days.on( 'click.fu.datepicker', 'tr td button', $.proxy( this.dateClicked, this ) );
-			this.$element.find( '.dropdown-menu' ).on( 'mousedown.fu.datepicker', $.proxy( this.dropdownMousedown, this ) );
 			this.$header.find( '.next' ).on( 'click.fu.datepicker', $.proxy( this.next, this ) );
 			this.$header.find( '.prev' ).on( 'click.fu.datepicker', $.proxy( this.prev, this ) );
 			this.$headerTitle.on( 'click.fu.datepicker', $.proxy( this.titleClicked, this ) );
-			this.$input.on( 'blur.fu.datepicker', $.proxy( this.inputBlurred, this ) );
-			this.$input.on( 'focus.fu.datepicker', $.proxy( this.inputFocused, this ) );
+			this.$input.on( 'change.fu.datepicker', $.proxy( this.inputChanged, this ) );
+			this.$input.on( 'mousedown.fu.datepicker', $.proxy( this.showDropdown, this ) );
 			this.$wheels.find( '.datepicker-wheels-back' ).on( 'click.fu.datepicker', $.proxy( this.backClicked, this ) );
 			this.$wheels.find( '.datepicker-wheels-select' ).on( 'click.fu.datepicker', $.proxy( this.selectClicked, this ) );
 			this.$wheelsMonth.on( 'click.fu.datepicker', 'ul button', $.proxy( this.monthClicked, this ) );
@@ -684,7 +631,7 @@
 				if (
 					( $.isFunction( window.moment ) || ( typeof moment !== 'undefined' && $.isFunction( moment ) ) ) &&
 					$.isPlainObject( this.options.momentConfig ) &&
-					this.options.momentConfig.culture && this.options.momentConfig.format
+					( typeof this.options.momentConfig.culture === 'string' && typeof this.options.momentConfig.format === 'string' )
 				) {
 					return true;
 				} else {
@@ -707,6 +654,7 @@
 				this.selectedDate = date;
 				this.$input.val( this.formatDate( date ) );
 				this.inputValue = this.$input.val();
+				this.hideDropdown();
 				this.$input.focus();
 				this.$element.trigger( 'dateClicked.fu.datepicker', date );
 			},
@@ -727,14 +675,6 @@
 				this.$element.addClass( 'disabled' );
 				this.$element.find( 'input, button' ).attr( 'disabled', 'disabled' );
 				this.$element.find( '.input-group-btn' ).removeClass( 'open' );
-			},
-
-			dropdownMousedown: function() {
-				var self = this;
-				this.preventBlurHide = true;
-				setTimeout( function() {
-					self.preventBlurHide = false;
-				}, 0 );
 			},
 
 			enable: function() {
@@ -783,7 +723,7 @@
 				return this.restricted;
 			},
 
-			inputBlurred: function( e ) {
+			inputChanged: function() {
 				var inputVal = this.$input.val();
 				var date;
 				if ( inputVal !== this.inputValue ) {
@@ -797,14 +737,16 @@
 					}
 
 				}
+			},
 
-				if ( !this.preventBlurHide ) {
-					this.$element.find( '.input-group-btn' ).removeClass( 'open' );
+			showDropdown: function( e ) {
+				if ( !this.$input.is( ':focus' ) ) {
+					this.$element.find( '.input-group-btn' ).addClass( 'open' );
 				}
 			},
 
-			inputFocused: function( e ) {
-				this.$element.find( '.input-group-btn' ).addClass( 'open' );
+			hideDropdown: function() {
+				this.$element.find( '.input-group-btn' ).removeClass( 'open' );
 			},
 
 			isInvalidDate: function( date ) {
@@ -1243,7 +1185,8 @@
 				$( e.currentTarget ).parent().addClass( 'selected' );
 			}
 		};
-
+		//for control library consistency
+		Datepicker.prototype.getValue = Datepicker.prototype.getDate;
 
 		// DATEPICKER PLUGIN DEFINITION
 
@@ -1411,22 +1354,28 @@
 		}
 
 		function _getContainer( element ) {
-			var containerElement, isWindow;
-			if ( element.attr( 'data-target' ) ) {
-				containerElement = element.attr( 'data-target' );
+			var targetSelector = element.attr( 'data-target' );
+			var isWindow = true;
+			var containerElement;
+
+			if ( !targetSelector ) {
+				// no selection so find the relevant ancestor
+				$.each( element.parents(), function( index, parentElement ) {
+					if ( $( parentElement ).css( 'overflow' ) !== 'visible' ) {
+						containerElement = parentElement;
+						isWindow = false;
+						return false;
+					}
+				} );
+			} else if ( targetSelector !== 'window' ) {
+				containerElement = $( targetSelector );
 				isWindow = false;
-			} else {
-				containerElement = window;
-				isWindow = true;
 			}
 
-			$.each( element.parents(), function( index, value ) {
-				if ( $( value ).css( 'overflow' ) !== 'visible' ) {
-					containerElement = value;
-					isWindow = false;
-					return false;
-				}
-			} );
+			// fallback to window
+			if ( isWindow ) {
+				containerElement = window;
+			}
 
 			return {
 				overflowElement: $( containerElement ),
@@ -1488,6 +1437,8 @@
 			constructor: Loader,
 
 			destroy: function() {
+				this.pause();
+
 				this.$element.remove();
 				// any external bindings
 				// [none]
@@ -1616,13 +1567,21 @@
 		// -- BEGIN MODULE CODE HERE --
 
 		var old = $.fn.placard;
+		var EVENT_CALLBACK_MAP = {
+			'accepted': 'onAccept',
+			'cancelled': 'onCancel'
+		};
 
 		// PLACARD CONSTRUCTOR AND PROTOTYPE
 
-		var Placard = function( element, options ) {
+		var Placard = function Placard( element, options ) {
 			var self = this;
 			this.$element = $( element );
 			this.options = $.extend( {}, $.fn.placard.defaults, options );
+
+			if ( this.$element.attr( 'data-ellipsis' ) === 'true' ) {
+				this.options.applyEllipsis = true;
+			}
 
 			this.$accept = this.$element.find( '.placard-accept' );
 			this.$cancel = this.$element.find( '.placard-cancel' );
@@ -1642,48 +1601,73 @@
 
 			this.$field.on( 'focus.fu.placard', $.proxy( this.show, this ) );
 			this.$field.on( 'keydown.fu.placard', $.proxy( this.keyComplete, this ) );
-			this.$accept.on( 'click.fu.placard', $.proxy( this.complete, this, 'accept' ) );
+			this.$element.on( 'close.fu.placard', $.proxy( this.hide, this ) );
+			this.$accept.on( 'click.fu.placard', $.proxy( this.complete, this, 'accepted' ) );
 			this.$cancel.on( 'click.fu.placard', function( e ) {
 				e.preventDefault();
-				self.complete( 'cancel' );
+				self.complete( 'cancelled' );
 			} );
 
-			this.ellipsis();
+			this.applyEllipsis();
+		};
+
+		var _isShown = function _isShown( placard ) {
+			if ( placard.$element.hasClass( 'showing' ) ) {
+				return true;
+			}
+			return false;
+		};
+
+		var _closeOtherPlacards = function _closeOtherPlacards() {
+			var otherPlacards;
+
+			otherPlacards = $( document ).find( '.placard.showing' );
+			if ( otherPlacards.length > 0 ) {
+				if ( otherPlacards.data( 'fu.placard' ) && otherPlacards.data( 'fu.placard' ).options.explicit ) {
+					return false; //failed
+				}
+
+				otherPlacards.placard( 'externalClickListener', {}, true );
+			}
+
+			return true; //succeeded
 		};
 
 		Placard.prototype = {
 			constructor: Placard,
 
-			complete: function( action ) {
-				var func = this.options[ 'on' + action[ 0 ].toUpperCase() + action.substring( 1 ) ];
+			complete: function complete( action ) {
+				var func = this.options[ EVENT_CALLBACK_MAP[ action ] ];
+
 				var obj = {
 					previousValue: this.previousValue,
-					value: this.$field.val()
+					value: this.getValue()
 				};
+
 				if ( func ) {
 					func( obj );
-					this.$element.trigger( action, obj );
+					this.$element.trigger( action + '.fu.placard', obj );
 				} else {
-					if ( action === 'cancel' && this.options.revertOnCancel ) {
-						this.$field.val( this.previousValue );
+					if ( action === 'cancelled' && this.options.revertOnCancel ) {
+						this.setValue( this.previousValue, true );
 					}
 
-					this.$element.trigger( action, obj );
+					this.$element.trigger( action + '.fu.placard', obj );
 					this.hide();
 				}
 			},
 
-			keyComplete: function( e ) {
+			keyComplete: function keyComplete( e ) {
 				if ( this.isInput && e.keyCode === 13 ) {
-					this.complete( 'accept' );
+					this.complete( 'accepted' );
 					this.$field.blur();
 				} else if ( e.keyCode === 27 ) {
-					this.complete( 'cancel' );
+					this.complete( 'cancelled' );
 					this.$field.blur();
 				}
 			},
 
-			destroy: function() {
+			destroy: function destroy() {
 				this.$element.remove();
 				// remove any external bindings
 				$( document ).off( 'click.fu.placard.externalClick.' + this.clickStamp );
@@ -1697,32 +1681,32 @@
 				return this.$element[ 0 ].outerHTML;
 			},
 
-			disable: function() {
+			disable: function disable() {
 				this.$element.addClass( 'disabled' );
 				this.$field.attr( 'disabled', 'disabled' );
 				this.hide();
 			},
 
-			ellipsis: function() {
+			applyEllipsis: function applyEllipsis() {
 				var field, i, str;
-				if ( this.$element.attr( 'data-ellipsis' ) === 'true' ) {
+				if ( this.options.applyEllipsis ) {
 					field = this.$field.get( 0 );
 					if ( this.$field.is( 'input' ) ) {
 						field.scrollLeft = 0;
 					} else {
 						field.scrollTop = 0;
 						if ( field.clientHeight < field.scrollHeight ) {
-							this.actualValue = this.$field.val();
-							this.$field.val( '' );
+							this.actualValue = this.getValue();
+							this.setValue( '', true );
 							str = '';
 							i = 0;
 							while ( field.clientHeight >= field.scrollHeight ) {
 								str += this.actualValue[ i ];
-								this.$field.val( str + '...' );
+								this.setValue( str + '...', true );
 								i++;
 							}
 							str = ( str.length > 0 ) ? str.substring( 0, str.length - 1 ) : '';
-							this.$field.val( str + '...' );
+							this.setValue( str + '...', true );
 						}
 
 					}
@@ -1730,18 +1714,18 @@
 				}
 			},
 
-			enable: function() {
+			enable: function enable() {
 				this.$element.removeClass( 'disabled' );
 				this.$field.removeAttr( 'disabled' );
 			},
 
-			externalClickListener: function( e, force ) {
+			externalClickListener: function externalClickListener( e, force ) {
 				if ( force === true || this.isExternalClick( e ) ) {
 					this.complete( this.options.externalClickAction );
 				}
 			},
 
-			getValue: function() {
+			getValue: function getValue() {
 				if ( this.actualValue !== null ) {
 					return this.actualValue;
 				} else {
@@ -1749,18 +1733,18 @@
 				}
 			},
 
-			hide: function() {
+			hide: function hide() {
 				if ( !this.$element.hasClass( 'showing' ) ) {
 					return;
 				}
 
 				this.$element.removeClass( 'showing' );
-				this.ellipsis();
+				this.applyEllipsis();
 				$( document ).off( 'click.fu.placard.externalClick.' + this.clickStamp );
 				this.$element.trigger( 'hidden.fu.placard' );
 			},
 
-			isExternalClick: function( e ) {
+			isExternalClick: function isExternalClick( e ) {
 				var el = this.$element.get( 0 );
 				var exceptions = this.options.externalClickExceptions || [];
 				var $originEl = $( e.target );
@@ -1780,36 +1764,53 @@
 				return true;
 			},
 
-			setValue: function( val ) {
-				this.$field.val( val );
-				if ( !this.$element.hasClass( 'showing' ) ) {
-					this.ellipsis();
+			/**
+			 * setValue() sets the Placard triggering DOM element's display value
+			 *
+			 * @param {String} the value to be displayed
+			 * @param {Boolean} If you want to explicitly suppress the application
+			 *					of ellipsis, pass `true`. This would typically only be
+			 *					done from internal functions (like `applyEllipsis`)
+			 *					that want to avoid circular logic. Otherwise, the
+			 *					value of the option applyEllipsis will be used.
+			 * @return {Object} jQuery object representing the DOM element whose
+			 *					value was set
+			 */
+			setValue: function setValue( val, suppressEllipsis ) {
+				//if suppressEllipsis is undefined, check placards init settings
+				if ( typeof suppressEllipsis === "undefined" ) {
+					suppressEllipsis = !this.options.applyEllipsis;
 				}
+
+				this.$field.val( val );
+
+				if ( !suppressEllipsis && !_isShown( this ) ) {
+					this.applyEllipsis();
+				}
+
+				return this.$field;
 			},
 
-			show: function() {
-				var other;
-
-				if ( this.$element.hasClass( 'showing' ) ) {
+			show: function show() {
+				if ( _isShown( this ) ) {
 					return;
 				}
-
-				other = $( document ).find( '.placard.showing' );
-				if ( other.length > 0 ) {
-					if ( other.data( 'fu.placard' ) && other.data( 'fu.placard' ).options.explicit ) {
-						return;
-					}
-
-					other.placard( 'externalClickListener', {}, true );
+				if ( !_closeOtherPlacards() ) {
+					return;
 				}
 
 				this.previousValue = this.$field.val();
 
-				this.$element.addClass( 'showing' );
 				if ( this.actualValue !== null ) {
-					this.$field.val( this.actualValue );
+					this.setValue( this.actualValue );
 					this.actualValue = null;
 				}
+
+				this.showPlacard();
+			},
+
+			showPlacard: function showPlacard() {
+				this.$element.addClass( 'showing' );
 
 				if ( this.$header.length > 0 ) {
 					this.$popup.css( 'top', '-' + this.$header.outerHeight( true ) + 'px' );
@@ -1853,10 +1854,11 @@
 		$.fn.placard.defaults = {
 			onAccept: undefined,
 			onCancel: undefined,
-			externalClickAction: 'cancel',
+			externalClickAction: 'cancelled',
 			externalClickExceptions: [],
 			explicit: false,
-			revertOnCancel: -1 //negative 1 will check for an '.placard-accept' button. Also can be set to true or false
+			revertOnCancel: -1, //negative 1 will check for an '.placard-accept' button. Also can be set to true or false
+			applyEllipsis: false
 		};
 
 		$.fn.placard.Constructor = Placard;
@@ -1963,15 +1965,15 @@
 			},
 
 			setCheckedState: function( element, checked ) {
-				// reset all items in group
-				this.resetGroup();
-
 				var $radio = element;
 				var $lbl = $radio.parent();
 				var containerSelector = $radio.attr( 'data-toggle' );
 				var $containerToggle = $( containerSelector );
 
 				if ( checked ) {
+					// reset all items in group
+					this.resetGroup();
+
 					$radio.prop( 'checked', true );
 					$lbl.addClass( 'checked' );
 					$containerToggle.removeClass( 'hide hidden' );
@@ -2037,6 +2039,7 @@
 			}
 		};
 
+		Radio.prototype.getValue = Radio.prototype.isChecked;
 
 		// RADIO PLUGIN DEFINITION
 
@@ -2116,13 +2119,16 @@
 			this.$element = $( element );
 			this.options = $.extend( {}, $.fn.search.defaults, options );
 
+			if ( this.$element.attr( 'data-searchOnKeyPress' ) === 'true' ) {
+				this.options.searchOnKeyPress = true;
+			}
+
 			this.$button = this.$element.find( 'button' );
 			this.$input = this.$element.find( 'input' );
 			this.$icon = this.$element.find( '.glyphicon' );
 
 			this.$button.on( 'click.fu.search', $.proxy( this.buttonclicked, this ) );
-			this.$input.on( 'keydown.fu.search', $.proxy( this.keypress, this ) );
-			this.$input.on( 'keyup.fu.search', $.proxy( this.keypressed, this ) );
+			this.$input.on( 'keyup.fu.search', $.proxy( this.keypress, this ) );
 
 			this.activeSearch = '';
 		};
@@ -2168,52 +2174,40 @@
 
 			action: function() {
 				var val = this.$input.val();
-				var inputEmptyOrUnchanged = ( val === '' || val === this.activeSearch );
-
-				if ( this.activeSearch && inputEmptyOrUnchanged ) {
-					this.clear();
-				} else if ( val ) {
+				if ( val && val.length > 0 ) {
 					this.search( val );
+				} else {
+					this.clear();
 				}
 			},
 
 			buttonclicked: function( e ) {
 				e.preventDefault();
 				if ( $( e.currentTarget ).is( '.disabled, :disabled' ) ) return;
-				this.action();
-			},
 
-			keypress: function( e ) {
-				if ( e.which === 13 ) {
-					e.preventDefault();
+				if ( this.$element.hasClass( 'searched' ) ) {
+					this.clear();
+				} else {
+					this.action();
 				}
 			},
 
-			keypressed: function( e ) {
-				var remove = 'glyphicon-remove';
-				var search = 'glyphicon-search';
-				var val;
+			keypress: function( e ) {
+				var ENTER_KEY_CODE = 13;
+				var TAB_KEY_CODE = 9;
+				var ESC_KEY_CODE = 27;
 
-				if ( e.which === 13 ) {
+				if ( e.which === ENTER_KEY_CODE ) {
 					e.preventDefault();
 					this.action();
-				} else if ( e.which === 9 ) {
+				} else if ( e.which === TAB_KEY_CODE ) {
 					e.preventDefault();
-				} else {
-					val = this.$input.val();
-
-					if ( val !== this.activeSearch || !val ) {
-						this.$icon.removeClass( remove ).addClass( search );
-						if ( val ) {
-							this.$element.removeClass( 'searched' );
-						} else if ( this.options.clearOnEmpty ) {
-							this.clear();
-						}
-
-					} else {
-						this.$icon.removeClass( search ).addClass( remove );
-					}
-
+				} else if ( e.which === ESC_KEY_CODE ) {
+					e.preventDefault();
+					this.clear();
+				} else if ( this.options.searchOnKeyPress ) {
+					// search on other keypress
+					this.action();
 				}
 			},
 
@@ -2255,7 +2249,8 @@
 		};
 
 		$.fn.search.defaults = {
-			clearOnEmpty: false
+			clearOnEmpty: false,
+			searchOnKeyPress: false
 		};
 
 		$.fn.search.Constructor = Search;
@@ -2310,6 +2305,7 @@
 			this.$element = $( element );
 			this.options = $.extend( {}, $.fn.selectlist.defaults, options );
 
+
 			this.$button = this.$element.find( '.btn.dropdown-toggle' );
 			this.$hiddenField = this.$element.find( '.hidden-field' );
 			this.$label = this.$element.find( '.selected-label' );
@@ -2321,6 +2317,37 @@
 			if ( options.resize === 'auto' || this.$element.attr( 'data-resize' ) === 'auto' ) {
 				this.resize();
 			}
+
+			// if selectlist is empty or is one item, disable it
+			var items = this.$dropdownMenu.children( 'li' );
+			if ( items.length === 0 ) {
+				this.disable();
+				this.doSelect( $( this.options.emptyLabelHTML ) );
+			}
+
+			// support jumping focus to first letter in dropdown when key is pressed
+			this.$element.on( 'shown.bs.dropdown', function() {
+				var $this = $( this );
+				// attach key listener when dropdown is shown
+				$( document ).on( 'keypress.fu.selectlist', function( e ) {
+
+					// get the key that was pressed
+					var key = String.fromCharCode( e.which );
+					// look the items to find the first item with the first character match and set focus
+					$this.find( "li" ).each( function( idx, item ) {
+						if ( $( item ).text().charAt( 0 ).toLowerCase() === key ) {
+							$( item ).children( 'a' ).focus();
+							return false;
+						}
+					} );
+
+				} );
+			} );
+
+			// unbind key event when dropdown is hidden
+			this.$element.on( 'hide.bs.dropdown', function() {
+				$( document ).off( 'keypress.fu.selectlist' );
+			} );
 		};
 
 		Selectlist.prototype = {
@@ -2359,6 +2386,10 @@
 				this.$element.trigger( 'clicked.fu.selectlist', this.$selectedItem );
 
 				e.preventDefault();
+				// ignore if a disabled item is clicked
+				if ( $( e.currentTarget ).parent( 'li' ).is( '.disabled, :disabled' ) ) {
+					return;
+				}
 
 				// is clicked element different from currently selected element?
 				if ( !( $( e.target ).parent().is( this.$selectedItem ) ) ) {
@@ -2470,6 +2501,8 @@
 			}
 		};
 
+		Selectlist.prototype.getValue = Selectlist.prototype.selectedItem;
+
 
 		// SELECT PLUGIN DEFINITION
 
@@ -2494,7 +2527,9 @@
 			return ( methodReturn === undefined ) ? $set : methodReturn;
 		};
 
-		$.fn.selectlist.defaults = {};
+		$.fn.selectlist.defaults = {
+			emptyLabelHTML: '<li data-value=""><a href="#">No items</a></li>'
+		};
 
 		$.fn.selectlist.Constructor = Selectlist;
 
@@ -2546,16 +2581,23 @@
 
 		// SPINBOX CONSTRUCTOR AND PROTOTYPE
 
-		var Spinbox = function( element, options ) {
+		var Spinbox = function Spinbox( element, options ) {
 			this.$element = $( element );
 			this.$element.find( '.btn' ).on( 'click', function( e ) {
 				//keep spinbox from submitting if they forgot to say type="button" on their spinner buttons
 				e.preventDefault();
 			} );
 			this.options = $.extend( {}, $.fn.spinbox.defaults, options );
+			this.options.step = this.$element.data( 'step' ) || this.options.step;
+
+			if ( this.options.value < this.options.min ) {
+				this.options.value = this.options.min;
+			} else if ( this.options.max < this.options.value ) {
+				this.options.value = this.options.max;
+			}
+
 			this.$input = this.$element.find( '.spinbox-input' );
-			this.$element.on( 'focusin.fu.spinbox', this.$input, $.proxy( this.changeFlag, this ) );
-			this.$element.on( 'focusout.fu.spinbox', this.$input, $.proxy( this.change, this ) );
+			this.$input.on( 'focusout.fu.spinbox', this.$input, $.proxy( this.change, this ) );
 			this.$element.on( 'keydown.fu.spinbox', this.$input, $.proxy( this.keydown, this ) );
 			this.$element.on( 'keyup.fu.spinbox', this.$input, $.proxy( this.keyup, this ) );
 
@@ -2593,6 +2635,9 @@
 				this.switches.speed = 500;
 			}
 
+			this.options.defaultUnit = _isUnitLegal( this.options.defaultUnit, this.options.units ) ? this.options.defaultUnit : '';
+			this.unit = this.options.defaultUnit;
+
 			this.lastValue = this.options.value;
 
 			this.render();
@@ -2602,10 +2647,65 @@
 			}
 		};
 
+		// Truly private methods
+		var _limitToStep = function _limitToStep( number, step ) {
+			return Math.round( number / step ) * step;
+		};
+
+		var _isUnitLegal = function _isUnitLegal( unit, validUnits ) {
+			var legalUnit = false;
+			var suspectUnit = unit.toLowerCase();
+
+			$.each( validUnits, function( i, validUnit ) {
+				validUnit = validUnit.toLowerCase();
+				if ( suspectUnit === validUnit ) {
+					legalUnit = true;
+					return false; //break out of the loop
+				}
+			} );
+
+			return legalUnit;
+		};
+
+		var _applyLimits = function _applyLimits( value ) {
+			// if unreadable
+			if ( isNaN( parseFloat( value ) ) ) {
+				return value;
+			}
+
+			// if not within range return the limit
+			if ( value > this.options.max ) {
+				if ( this.options.cycle ) {
+					value = this.options.min;
+				} else {
+					value = this.options.max;
+				}
+			} else if ( value < this.options.min ) {
+				if ( this.options.cycle ) {
+					value = this.options.max;
+				} else {
+					value = this.options.min;
+				}
+			}
+
+			if ( this.options.limitToStep && this.options.step ) {
+				value = _limitToStep( value, this.options.step );
+
+				//force round direction so that it stays within bounds
+				if ( value > this.options.max ) {
+					value = value - this.options.step;
+				} else if ( value < this.options.min ) {
+					value = value + this.options.step;
+				}
+			}
+
+			return value;
+		};
+
 		Spinbox.prototype = {
 			constructor: Spinbox,
 
-			destroy: function() {
+			destroy: function destroy() {
 				this.$element.remove();
 				// any external bindings
 				// [none]
@@ -2619,65 +2719,17 @@
 				return this.$element[ 0 ].outerHTML;
 			},
 
-			render: function() {
-				var inputValue = this.parseInput( this.$input.val() );
-				var maxUnitLength = '';
-
-				// if input is empty and option value is default, 0
-				if ( inputValue !== '' && this.options.value === 0 ) {
-					this.value( inputValue );
-				} else {
-					this.output( this.options.value );
-				}
-
-				if ( this.options.units.length ) {
-					$.each( this.options.units, function( index, value ) {
-						if ( value.length > maxUnitLength.length ) {
-							maxUnitLength = value;
-						}
-					} );
-				}
+			render: function render() {
+				this.setValue( this.getDisplayValue() );
 			},
 
-			output: function( value, updateField ) {
-				value = ( value + '' ).split( '.' ).join( this.options.decimalMark );
-				updateField = ( updateField || true );
-				if ( updateField ) {
-					this.$input.val( value );
-				}
+			change: function change() {
+				this.setValue( this.getDisplayValue() );
 
-				return value;
-			},
-
-			parseInput: function( value ) {
-				value = ( value + '' ).split( this.options.decimalMark ).join( '.' );
-
-				return value;
-			},
-
-			change: function() {
-				var newVal = this.parseInput( this.$input.val() ) || '';
-
-				if ( this.options.units.length || this.options.decimalMark !== '.' ) {
-					newVal = this.parseValueWithUnit( newVal );
-				} else if ( newVal / 1 ) {
-					newVal = this.options.value = this.checkMaxMin( newVal / 1 );
-				} else {
-					newVal = this.checkMaxMin( newVal.replace( /[^0-9.-]/g, '' ) || '' );
-					this.options.value = newVal / 1;
-				}
-
-				this.output( newVal );
-
-				this.changeFlag = false;
 				this.triggerChangedEvent();
 			},
 
-			changeFlag: function() {
-				this.changeFlag = true;
-			},
-
-			stopSpin: function() {
+			stopSpin: function stopSpin() {
 				if ( this.switches.timeout !== undefined ) {
 					clearTimeout( this.switches.timeout );
 					this.switches.count = 1;
@@ -2685,16 +2737,16 @@
 				}
 			},
 
-			triggerChangedEvent: function() {
-				var currentValue = this.value();
+			triggerChangedEvent: function triggerChangedEvent() {
+				var currentValue = this.getValue();
 				if ( currentValue === this.lastValue ) return;
 				this.lastValue = currentValue;
 
 				// Primary changed event
-				this.$element.trigger( 'changed.fu.spinbox', this.output( currentValue, false ) ); // no DOM update
+				this.$element.trigger( 'changed.fu.spinbox', currentValue );
 			},
 
-			startSpin: function( type ) {
+			startSpin: function startSpin( type ) {
 				if ( !this.options.disabled ) {
 					var divisor = this.switches.count;
 
@@ -2716,140 +2768,141 @@
 				}
 			},
 
-			iterate: function( type ) {
+			iterate: function iterate( type ) {
 				this.step( type );
 				this.startSpin( type );
 			},
 
-			step: function( isIncrease ) {
-				// isIncrease: true is up, false is down
+			step: function step( isIncrease ) {
+				//refresh value from display before trying to increment in case they have just been typing before clicking the nubbins
+				this.setValue( this.getDisplayValue() );
+				var newVal;
 
-				var digits, multiple, currentValue, limitValue;
-
-				// trigger change event
-				if ( this.changeFlag ) {
-					this.change();
-				}
-
-				// get current value and min/max options
-				currentValue = this.options.value;
-				limitValue = isIncrease ? this.options.max : this.options.min;
-
-				if ( ( isIncrease ? currentValue < limitValue : currentValue > limitValue ) ) {
-					var newVal = currentValue + ( isIncrease ? 1 : -1 ) * this.options.step;
-
-					// raise to power of 10 x number of decimal places, then round
-					if ( this.options.step % 1 !== 0 ) {
-						digits = ( this.options.step + '' ).split( '.' )[ 1 ].length;
-						multiple = Math.pow( 10, digits );
-						newVal = Math.round( newVal * multiple ) / multiple;
-					}
-
-					// if outside limits, set to limit value
-					if ( isIncrease ? newVal > limitValue : newVal < limitValue ) {
-						this.value( limitValue );
-					} else {
-						this.value( newVal );
-					}
-
-				} else if ( this.options.cycle ) {
-					var cycleVal = isIncrease ? this.options.min : this.options.max;
-					this.value( cycleVal );
-				}
-			},
-
-			value: function( value ) {
-				if ( value || value === 0 ) {
-					if ( this.options.units.length || this.options.decimalMark !== '.' ) {
-						this.output( this.parseValueWithUnit( value + ( this.unit || '' ) ) );
-						return this;
-
-					} else if ( !isNaN( parseFloat( value ) ) && isFinite( value ) ) {
-						this.options.value = value / 1;
-						this.output( value + ( this.unit ? this.unit : '' ) );
-						return this;
-
-					}
-
+				if ( isIncrease ) {
+					newVal = this.options.value + this.options.step;
 				} else {
-					if ( this.changeFlag ) {
-						this.change();
-					}
+					newVal = this.options.value - this.options.step;
+				}
 
-					if ( this.unit ) {
-						return this.options.value + this.unit;
-					} else {
-						return this.output( this.options.value, false ); // no DOM update
-					}
+				newVal = newVal.toFixed( 5 );
 
+				this.setValue( newVal + this.unit );
+			},
+
+			getDisplayValue: function getDisplayValue() {
+				var inputValue = this.parseInput( this.$input.val() );
+				var value = ( !!inputValue ) ? inputValue : this.options.value;
+				return value;
+			},
+
+			setDisplayValue: function setDisplayValue( value ) {
+				this.$input.val( value );
+			},
+
+			getValue: function getValue() {
+				var val = this.options.value;
+				if ( this.options.decimalMark !== '.' ) {
+					val = ( val + '' ).split( '.' ).join( this.options.decimalMark );
+				}
+				return val + this.unit;
+			},
+
+			setValue: function setValue( val ) {
+				//remove any i18n on the number
+				if ( this.options.decimalMark !== '.' ) {
+					val = this.parseInput( val );
+				}
+
+				//are we dealing with united numbers?
+				if ( typeof val !== "number" ) {
+					var potentialUnit = val.replace( /[0-9.-]/g, '' );
+					//make sure unit is valid, or else drop it in favor of current unit, or default unit (potentially nothing)
+					this.unit = _isUnitLegal( potentialUnit, this.options.units ) ? potentialUnit : this.options.defaultUnit;
+				}
+
+				var intVal = this.getIntValue( val );
+
+				//make sure we are dealing with a number
+				if ( isNaN( intVal ) && !isFinite( intVal ) ) {
+					return this.setValue( this.options.value );
+				}
+
+				//conform
+				intVal = _applyLimits.call( this, intVal );
+
+				//cache the pure int value
+				this.options.value = intVal;
+
+				//prepare number for display
+				val = intVal + this.unit;
+
+				if ( this.options.decimalMark !== '.' ) {
+					val = ( val + '' ).split( '.' ).join( this.options.decimalMark );
+				}
+
+				//display number
+				this.setDisplayValue( val );
+
+				return this;
+			},
+
+			value: function value( val ) {
+				if ( val || val === 0 ) {
+					return this.setValue( val );
+				} else {
+					return this.getValue();
 				}
 			},
 
-			isUnitLegal: function( unit ) {
-				var legalUnit;
-
-				$.each( this.options.units, function( index, value ) {
-					if ( value.toLowerCase() === unit.toLowerCase() ) {
-						legalUnit = unit.toLowerCase();
-						return false;
-					}
-				} );
-
-				return legalUnit;
-			},
-
-			// strips units and add them back
-			parseValueWithUnit: function( value ) {
-				var unit = value.replace( /[^a-zA-Z]/g, '' );
-				var number = value.replace( /[^0-9.-]/g, '' );
-
-				if ( unit ) {
-					unit = this.isUnitLegal( unit );
-				}
-
-				this.options.value = this.checkMaxMin( number / 1 );
-				this.unit = unit || undefined;
-				return this.options.value + ( unit || '' );
-			},
-
-			checkMaxMin: function( value ) {
-				// if unreadable
-				if ( isNaN( parseFloat( value ) ) ) {
-					return value;
-				}
-
-				// if not within range return the limit
-				if ( !( value <= this.options.max && value >= this.options.min ) ) {
-					value = value >= this.options.max ? this.options.max : this.options.min;
-				}
+			parseInput: function parseInput( value ) {
+				value = ( value + '' ).split( this.options.decimalMark ).join( '.' );
 
 				return value;
 			},
 
-			disable: function() {
+			getIntValue: function getIntValue( value ) {
+				//if they didn't pass in a number, try and get the number
+				value = ( typeof value === "undefined" ) ? this.getValue() : value;
+				// if there still isn't a number, abort
+				if ( typeof value === "undefined" ) {
+					return;
+				}
+
+				if ( typeof value === 'string' ) {
+					value = this.parseInput( value );
+				}
+
+				value = parseFloat( value, 10 );
+
+				return value;
+			},
+
+			disable: function disable() {
 				this.options.disabled = true;
 				this.$element.addClass( 'disabled' );
 				this.$input.attr( 'disabled', '' );
 				this.$element.find( 'button' ).addClass( 'disabled' );
 			},
 
-			enable: function() {
+			enable: function enable() {
 				this.options.disabled = false;
 				this.$element.removeClass( 'disabled' );
 				this.$input.removeAttr( 'disabled' );
 				this.$element.find( 'button' ).removeClass( 'disabled' );
 			},
 
-			keydown: function( event ) {
+			keydown: function keydown( event ) {
 				var keyCode = event.keyCode;
 				if ( keyCode === 38 ) {
 					this.step( true );
 				} else if ( keyCode === 40 ) {
 					this.step( false );
+				} else if ( keyCode === 13 ) {
+					this.change();
 				}
 			},
 
-			keyup: function( event ) {
+			keyup: function keyup( event ) {
 				var keyCode = event.keyCode;
 
 				if ( keyCode === 38 || keyCode === 40 ) {
@@ -2857,7 +2910,7 @@
 				}
 			},
 
-			bindMousewheelListeners: function() {
+			bindMousewheelListeners: function bindMousewheelListeners() {
 				var inputEl = this.$input.get( 0 );
 				if ( inputEl.addEventListener ) {
 					//IE 9, Chrome, Safari, Opera
@@ -2870,7 +2923,7 @@
 				}
 			},
 
-			mousewheelHandler: function( event ) {
+			mousewheelHandler: function mousewheelHandler( event ) {
 				if ( !this.options.disabled ) {
 					var e = window.event || event; // old IE support
 					var delta = Math.max( -1, Math.min( 1, ( e.wheelDelta || -e.detail ) ) );
@@ -2901,7 +2954,7 @@
 
 		// SPINBOX PLUGIN DEFINITION
 
-		$.fn.spinbox = function( option ) {
+		$.fn.spinbox = function spinbox( option ) {
 			var args = Array.prototype.slice.call( arguments, 1 );
 			var methodReturn;
 
@@ -2933,12 +2986,14 @@
 			disabled: false,
 			cycle: false,
 			units: [],
-			decimalMark: '.'
+			decimalMark: '.',
+			defaultUnit: '',
+			limitToStep: false
 		};
 
 		$.fn.spinbox.Constructor = Spinbox;
 
-		$.fn.spinbox.noConflict = function() {
+		$.fn.spinbox.noConflict = function noConflict() {
 			$.fn.spinbox = old;
 			return this;
 		};
@@ -3018,6 +3073,16 @@
 		Tree.prototype = {
 			constructor: Tree,
 
+			deselectAll: function deselectAll( nodes ) {
+				// clear all child tree nodes and style as deselected
+				nodes = nodes || this.$element;
+				var $selectedElements = $( nodes ).find( '.tree-selected' );
+				$selectedElements.each( function( index, element ) {
+					styleNodeDeselected( $( element ), $( element ).find( '.glyphicon' ) );
+				} );
+				return $selectedElements;
+			},
+
 			destroy: function destroy() {
 				// any external bindings [none]
 				// empty elements to return to original markup
@@ -3032,13 +3097,16 @@
 				this.populate( this.$element );
 			},
 
-			populate: function populate( $el ) {
+			populate: function populate( $el, isBackgroundProcess ) {
 				var self = this;
 				var $parent = ( $el.hasClass( 'tree' ) ) ? $el : $el.parent();
 				var loader = $parent.find( '.tree-loader:eq(0)' );
 				var treeData = $parent.data();
+				isBackgroundProcess = isBackgroundProcess || false; // no user affordance needed (ex.- "loading")
 
-				loader.removeClass( 'hide hidden' ); // hide is deprecated
+				if ( isBackgroundProcess === false ) {
+					loader.removeClass( 'hide hidden' ); // hide is deprecated
+				}
 				this.options.dataSource( treeData ? treeData : {}, function( items ) {
 					loader.addClass( 'hidden' );
 
@@ -3117,59 +3185,41 @@
 				} );
 			},
 
-			selectItem: function selectItem( el ) {
-				if ( !this.options.itemSelect ) return;
-				var $el = $( el );
-				var selData = $el.data();
-				var $all = this.$element.find( '.tree-selected' );
-				var data = [];
-				var $icon = $el.find( '.icon-item' );
+			selectTreeNode: function selectItem( clickedElement, nodeType ) {
+				var clicked = {}; // object for clicked element
+				clicked.$element = $( clickedElement );
 
-				if ( this.options.multiSelect ) {
-					$.each( $all, function( index, value ) {
-						var $val = $( value );
-						if ( $val[ 0 ] !== $el[ 0 ] ) {
-							data.push( $( value ).data() );
-						}
-					} );
-				} else if ( $all[ 0 ] !== $el[ 0 ] ) {
-					$all.removeClass( 'tree-selected' )
-						.find( '.glyphicon' ).removeClass( 'glyphicon-ok' ).addClass( 'fueluxicon-bullet' );
-					data.push( selData );
-				}
+				var selected = {}; // object for selected elements
+				selected.$elements = this.$element.find( '.tree-selected' );
+				selected.dataForEvent = [];
 
-				var eventType = 'selected';
-				if ( $el.hasClass( 'tree-selected' ) ) {
-					eventType = 'deselected';
-					$el.removeClass( 'tree-selected' );
-					if ( $icon.hasClass( 'glyphicon-ok' ) || $icon.hasClass( 'fueluxicon-bullet' ) ) {
-						$icon.removeClass( 'glyphicon-ok' ).addClass( 'fueluxicon-bullet' );
-					}
-
+				// determine clicked element and it's icon
+				if ( nodeType === 'folder' ) {
+					// make the clicked.$element the container branch
+					clicked.$element = clicked.$element.closest( '.tree-branch' );
+					clicked.$icon = clicked.$element.find( '.icon-folder' );
 				} else {
-					$el.addClass( 'tree-selected' );
-					// add tree dot back in
-					if ( $icon.hasClass( 'glyphicon-ok' ) || $icon.hasClass( 'fueluxicon-bullet' ) ) {
-						$icon.removeClass( 'fueluxicon-bullet' ).addClass( 'glyphicon-ok' );
-					}
+					clicked.$icon = clicked.$element.find( '.icon-item' );
+				}
+				clicked.elementData = clicked.$element.data();
 
-					if ( this.options.multiSelect ) {
-						data.push( selData );
-					}
-
+				// the below functions pass objects by copy/reference and use modified object in this function
+				if ( this.options.multiSelect ) {
+					multiSelectSyncNodes( this, clicked, selected );
+				} else {
+					singleSelectSyncNodes( this, clicked, selected );
 				}
 
-				this.$element.trigger( eventType + '.fu.tree', {
-					target: selData,
-					selected: data
+				// all done with the DOM, now fire events
+				this.$element.trigger( selected.eventType + '.fu.tree', {
+					target: clicked.elementData,
+					selected: selected.dataForEvent
 				} );
 
-				// Return new list of selected items, the item
-				// clicked, and the type of event:
-				$el.trigger( 'updated.fu.tree', {
-					selected: data,
-					item: $el,
-					eventType: eventType
+				clicked.$element.trigger( 'updated.fu.tree', {
+					selected: selected.dataForEvent,
+					item: clicked.$element,
+					eventType: selected.eventType
 				} );
 			},
 
@@ -3228,52 +3278,16 @@
 				}
 			},
 
-			selectFolder: function selectFolder( clickedElement ) {
-				if ( !this.options.folderSelect ) return;
-				var $clickedElement = $( clickedElement );
-				var $clickedBranch = $clickedElement.closest( '.tree-branch' );
-				var $selectedBranch = this.$element.find( '.tree-branch.tree-selected' );
-				var clickedData = $clickedBranch.data();
-				var selectedData = [];
-				var eventType = 'selected';
-
-				// select clicked item
-				if ( $clickedBranch.hasClass( 'tree-selected' ) ) {
-					eventType = 'deselected';
-					$clickedBranch.removeClass( 'tree-selected' );
-				} else {
-					$clickedBranch.addClass( 'tree-selected' );
+			selectFolder: function selectFolder( el ) {
+				if ( this.options.folderSelect ) {
+					this.selectTreeNode( el, 'folder' );
 				}
+			},
 
-				if ( this.options.multiSelect ) {
-					// get currently selected
-					$selectedBranch = this.$element.find( '.tree-branch.tree-selected' );
-
-					$.each( $selectedBranch, function( index, value ) {
-						var $value = $( value );
-						if ( $value[ 0 ] !== $clickedElement[ 0 ] ) {
-							selectedData.push( $( value ).data() );
-						}
-					} );
-
-				} else if ( $selectedBranch[ 0 ] !== $clickedElement[ 0 ] ) {
-					$selectedBranch.removeClass( 'tree-selected' );
-
-					selectedData.push( clickedData );
+			selectItem: function selectItem( el ) {
+				if ( this.options.itemSelect ) {
+					this.selectTreeNode( el, 'item' );
 				}
-
-				this.$element.trigger( eventType + '.fu.tree', {
-					target: clickedData,
-					selected: selectedData
-				} );
-
-				// Return new list of selected items, the item
-				// clicked, and the type of event:
-				$clickedElement.trigger( 'updated.fu.tree', {
-					selected: selectedData,
-					item: $clickedElement,
-					eventType: eventType
-				} );
 			},
 
 			selectedItems: function selectedItems() {
@@ -3420,13 +3434,89 @@
 					}
 
 				}
+			},
+
+			// This refreshes the children of a folder. Please destroy and re-initilize for "root level" refresh.
+			// The data of the refreshed folder is not updated. This control's architecture only allows updating of children.
+			// Folder renames should probably be handled directly on the node.
+			refreshFolder: function refreshFolder( $el ) {
+				var $treeFolder = $el.closest( '.tree-branch' );
+				var $treeFolderChildren = $treeFolder.find( '.tree-branch-children' );
+				$treeFolderChildren.eq( 0 ).empty();
+
+				if ( $treeFolder.hasClass( 'tree-open' ) ) {
+					this.populate( $treeFolderChildren, false );
+				} else {
+					this.populate( $treeFolderChildren, true );
+				}
+
+				this.$element.trigger( 'refreshedFolder.fu.tree', $treeFolder.data() );
 			}
+
 		};
+
+		// ALIASES
 
 		//alias for collapse for consistency. "Collapse" is an ambiguous term (collapse what? All? One specific branch?)
 		Tree.prototype.closeAll = Tree.prototype.collapse;
 		//alias for backwards compatibility because there's no reason not to.
 		Tree.prototype.openFolder = Tree.prototype.discloseFolder;
+		//For library consistency
+		Tree.prototype.getValue = Tree.prototype.selectedItems;
+
+		// PRIVATE FUNCTIONS
+
+		function styleNodeSelected( $element, $icon ) {
+			$element.addClass( 'tree-selected' );
+			if ( $element.data( 'type' ) === 'item' && $icon.hasClass( 'fueluxicon-bullet' ) ) {
+				$icon.removeClass( 'fueluxicon-bullet' ).addClass( 'glyphicon-ok' ); // make checkmark
+			}
+		}
+
+		function styleNodeDeselected( $element, $icon ) {
+			$element.removeClass( 'tree-selected' );
+			if ( $element.data( 'type' ) === 'item' && $icon.hasClass( 'glyphicon-ok' ) ) {
+				$icon.removeClass( 'glyphicon-ok' ).addClass( 'fueluxicon-bullet' ); // make bullet
+			}
+		}
+
+		function multiSelectSyncNodes( self, clicked, selected ) {
+			// search for currently selected and add to selected data list if needed
+			$.each( selected.$elements, function( index, element ) {
+				var $element = $( element );
+				if ( $element[ 0 ] !== clicked.$element[ 0 ] ) {
+					selected.dataForEvent.push( $( $element ).data() );
+				}
+			} );
+
+			if ( clicked.$element.hasClass( 'tree-selected' ) ) {
+				styleNodeDeselected( clicked.$element, clicked.$icon );
+				// set event data
+				selected.eventType = 'deselected';
+			} else {
+				styleNodeSelected( clicked.$element, clicked.$icon );
+				// set event data
+				selected.eventType = 'selected';
+				selected.dataForEvent.push( clicked.elementData );
+			}
+		}
+
+		function singleSelectSyncNodes( self, clicked, selected ) {
+			// element is not currently selected
+			if ( selected.$elements[ 0 ] !== clicked.$element[ 0 ] ) {
+				var clearedElements = self.deselectAll( self.$element );
+				styleNodeSelected( clicked.$element, clicked.$icon );
+				// set event data
+				selected.eventType = 'selected';
+				selected.dataForEvent = [ clicked.elementData ];
+			} else {
+				styleNodeDeselected( clicked.$element, clicked.$icon );
+				// set event data
+				selected.eventType = 'deselected';
+				selected.dataForEvent = [];
+			}
+		}
+
 
 		// TREE PLUGIN DEFINITION
 
@@ -3523,6 +3613,14 @@
 			this.numSteps = this.$element.find( '.steps li' ).length;
 			this.$prevBtn = this.$element.find( 'button.btn-prev' );
 			this.$nextBtn = this.$element.find( 'button.btn-next' );
+
+			// maintains backwards compatibility with < 3.8, will be removed in the future
+			if ( this.$element.children( '.steps-container' ).length === 0 ) {
+				this.$element.addClass( 'no-steps-container' );
+				if ( window && window.console && window.console.warn ) {
+					window.console.warn( 'please update your wizard markup to include ".steps-container" as seen in http://getfuelux.com/javascript.html#wizard-usage-markup' );
+				}
+			}
 
 			kids = this.$nextBtn.children().detach();
 			this.nextText = $.trim( this.$nextBtn.text() );
@@ -3805,16 +3903,16 @@
 			},
 
 			next: function() {
-				if ( this.currentStep < this.numSteps ) {
-					var e = $.Event( 'actionclicked.fu.wizard' );
-					this.$element.trigger( e, {
-						step: this.currentStep,
-						direction: 'next'
-					} );
-					if ( e.isDefaultPrevented() ) {
-						return;
-					} // respect preventDefault in case dev has attached validation to step and wants to stop propagation based on it.
+				var e = $.Event( 'actionclicked.fu.wizard' );
+				this.$element.trigger( e, {
+					step: this.currentStep,
+					direction: 'next'
+				} );
+				if ( e.isDefaultPrevented() ) {
+					return;
+				} // respect preventDefault in case dev has attached validation to step and wants to stop propagation based on it.
 
+				if ( this.currentStep < this.numSteps ) {
 					this.currentStep += 1;
 					this.setState();
 				} else { //is last step
@@ -3842,7 +3940,7 @@
 				if ( selectedItem ) {
 					step = selectedItem.step || -1;
 					//allow selection of step by data-name
-					step = isNaN( step ) && this.$element.find( '.steps li[data-name="' + step + '"]' ).first().attr( 'data-step' ) || step;
+					step = Number( this.$element.find( '.steps li[data-name="' + step + '"]' ).first().attr( 'data-step' ) ) || Number( step );
 
 					if ( 1 <= step && step <= this.numSteps ) {
 						this.currentStep = step;
@@ -4784,6 +4882,8 @@
 			}
 		};
 
+		Pillbox.prototype.getValue = Pillbox.prototype.items;
+
 		// PILLBOX PLUGIN DEFINITION
 
 		$.fn.pillbox = function( option ) {
@@ -4931,7 +5031,9 @@
 			this.$filters.selectlist();
 			this.$pageSize.selectlist();
 			this.$primaryPaging.find( '.combobox' ).combobox();
-			this.$search.search();
+			this.$search.search( {
+				searchOnKeyPress: this.options.searchOnKeyPress
+			} );
 
 			this.$filters.on( 'changed.fu.selectlist', function( e, value ) {
 				self.$element.trigger( 'filtered.fu.repeater', value );
@@ -4975,7 +5077,7 @@
 				self.resizeTimeout = setTimeout( function() {
 					self.resize();
 					self.$element.trigger( 'resized.fu.repeater' );
-				}, 75 );
+				}, 500 ); //any faster and you get weird catastrophic errors with the header of the list repeater
 			} );
 
 			this.$loader.loader();
@@ -5109,6 +5211,19 @@
 					this.$nextBtn.removeAttr( disabled );
 				}
 
+				// is 0 or 1 pages, if using $primaryPaging (combobox)
+				// if using selectlist allow user to use selectlist to select 0 or 1
+				if ( this.$prevBtn.hasClass( pageEnd ) && this.$nextBtn.hasClass( pageEnd ) ) {
+					this.$primaryPaging.combobox( 'disable' );
+				}
+
+				//if there are no items
+				if ( parseInt( this.$count.html() ) !== 0 ) {
+					this.$pageSize.selectlist( 'enable' );
+				} else {
+					this.$pageSize.selectlist( 'disable' );
+				}
+
 				this.$element.removeClass( 'disabled' );
 				this.$element.trigger( 'enabled.fu.repeater' );
 			},
@@ -5170,8 +5285,8 @@
 			},
 
 			infiniteScrolling: function( enable, options ) {
-				var itemization = this.$element.find( '.repeater-itemization' );
-				var pagination = this.$element.find( '.repeater-pagination' );
+				var footer = this.$element.find( '.repeater-footer' );
+				var viewport = this.$element.find( '.repeater-viewport' );
 				var cont, data;
 
 				options = options || {};
@@ -5182,8 +5297,10 @@
 					delete options.dataSource;
 					delete options.end;
 					this.infiniteScrollingOptions = options;
-					itemization.hide();
-					pagination.hide();
+					viewport.css( {
+						height: viewport.height() + footer.outerHeight()
+					} );
+					footer.hide();
 				} else {
 					cont = this.infiniteScrollingCont;
 					data = cont.data();
@@ -5195,8 +5312,10 @@
 					this.infiniteScrollingEnabled = false;
 					this.infiniteScrollingEnd = null;
 					this.infiniteScrollingOptions = {};
-					itemization.show();
-					pagination.show();
+					viewport.css( {
+						height: viewport.height() - footer.outerHeight()
+					} );
+					footer.show();
 				}
 			},
 
@@ -5305,11 +5424,15 @@
 				var pageEnd = 'page-end';
 				var pages = data.pages;
 				var dropMenu, i, l;
+				var currenPageOutput;
 
 				this.currentPage = ( page !== undefined ) ? page : NaN;
 
 				this.$primaryPaging.removeClass( act );
 				this.$secondaryPaging.removeClass( act );
+
+				// set paging to 0 if total pages is 0, otherwise use one-based index
+				currenPageOutput = pages === 0 ? 0 : this.currentPage + 1;
 
 				if ( pages <= this.viewOptions.dropPagingCap ) {
 					this.$primaryPaging.addClass( act );
@@ -5319,15 +5442,16 @@
 						l = i + 1;
 						dropMenu.append( '<li data-value="' + l + '"><a href="#">' + l + '</a></li>' );
 					}
-					this.$primaryPaging.find( 'input.form-control' ).val( this.currentPage + 1 );
+
+					this.$primaryPaging.find( 'input.form-control' ).val( currenPageOutput );
 				} else {
 					this.$secondaryPaging.addClass( act );
-					this.$secondaryPaging.val( this.currentPage + 1 );
+					this.$secondaryPaging.val( currenPageOutput );
 				}
 
 				this.lastPageInput = this.currentPage + 1 + '';
 
-				this.$pages.html( pages );
+				this.$pages.html( '' + pages );
 
 				// this is not the last page
 				if ( ( this.currentPage + 1 ) < pages ) {
@@ -5472,12 +5596,15 @@
 						bottom: this.$viewport.css( 'margin-bottom' ),
 						top: this.$viewport.css( 'margin-top' )
 					};
-					height = ( ( staticHeight === 'true' || staticHeight === true ) ? this.$element.height() : parseInt( staticHeight, 10 ) ) -
-						this.$element.find( '.repeater-header' ).outerHeight() -
-						this.$element.find( '.repeater-footer' ).outerHeight() -
-						( ( viewportMargins.bottom === 'auto' ) ? 0 : parseInt( viewportMargins.bottom, 10 ) ) -
-						( ( viewportMargins.top === 'auto' ) ? 0 : parseInt( viewportMargins.top, 10 ) );
-					this.$viewport.outerHeight( height );
+
+					var staticHeightValue = ( staticHeight === 'true' || staticHeight === true ) ? this.$element.height() : parseInt( staticHeight, 10 );
+					var headerHeight = this.$element.find( '.repeater-header' ).outerHeight();
+					var footerHeight = this.$element.find( '.repeater-footer' ).outerHeight();
+					var bottomMargin = ( viewportMargins.bottom === 'auto' ) ? 0 : parseInt( viewportMargins.bottom, 10 );
+					var topMargin = ( viewportMargins.top === 'auto' ) ? 0 : parseInt( viewportMargins.top, 10 );
+					height = staticHeightValue - headerHeight - footerHeight - bottomMargin - topMargin;
+
+					this.$viewport.outerHeight( height ); // but WHY are we setting the outerHeight of the viewport to this???
 				} else {
 					this.$canvas.removeClass( 'scrolling' );
 				}
@@ -5577,7 +5704,7 @@
 				var opts = {};
 				var viewName = curView.split( '.' )[ 1 ];
 
-				if ( viewName && this.options.views ) {
+				if ( this.options.views ) {
 					opts = this.options.views[ viewName ] || this.options.views[ curView ] || {};
 				} else {
 					opts = {};
@@ -5633,7 +5760,8 @@
 			defaultView: -1, //should be a string value. -1 means it will grab the active view from the view controls
 			dropPagingCap: 10,
 			staticHeight: -1, //normally true or false. -1 means it will look for data-staticheight on the element
-			views: null //can be set to an object to configure multiple views of the same type
+			views: null, //can be set to an object to configure multiple views of the same type,
+			searchOnKeyPress: false
 		};
 
 		$.fn.repeater.viewTypes = {};
@@ -5672,11 +5800,13 @@
 			};
 
 			$.fn.repeater.Constructor.prototype.list_highlightColumn = function( index, force ) {
-				var tbody = this.$canvas.find( '.repeater-list tbody' );
+				var tbody = this.$canvas.find( '.repeater-list-wrapper > table tbody' );
 				if ( this.viewOptions.list_highlightSortedColumn || force ) {
 					tbody.find( 'td.sorted' ).removeClass( 'sorted' );
 					tbody.find( 'tr' ).each( function() {
-						var col = $( this ).find( 'td:nth-child(' + ( index + 1 ) + ')' );
+						var col = $( this ).find( 'td:nth-child(' + ( index + 1 ) + ')' ).filter( function() {
+							return !$( this ).parent().hasClass( 'empty' );
+						} );
 						col.addClass( 'sorted' );
 					} );
 				}
@@ -5684,7 +5814,7 @@
 
 			$.fn.repeater.Constructor.prototype.list_getSelectedItems = function() {
 				var selected = [];
-				this.$canvas.find( '.repeater-list table tbody tr.selected' ).each( function() {
+				this.$canvas.find( '.repeater-list .repeater-list-wrapper > table tbody tr.selected' ).each( function() {
 					var $item = $( this );
 					selected.push( {
 						data: $item.data( 'item_data' ),
@@ -5693,6 +5823,8 @@
 				} );
 				return selected;
 			};
+
+			$.fn.repeater.Constructor.prototype.getValue = $.fn.repeater.Constructor.prototype.list_getSelectedItems;
 
 			$.fn.repeater.Constructor.prototype.list_positionHeadings = function() {
 				var $wrapper = this.$element.find( '.repeater-list-wrapper' );
@@ -5775,15 +5907,23 @@
 					var $hr = $( this );
 					var $heading = $hr.find( '.repeater-list-heading' );
 					$heading.outerHeight( $hr.outerHeight() );
-					$heading.outerWidth( $hr.outerWidth() );
+					// outerWidth isn't always appropriate or desirable. Allow an explicit value to be set if needed
+					$heading.outerWidth( $heading.data( 'forced-width' ) || $hr.outerWidth() );
 				} );
 			};
 
 			$.fn.repeater.Constructor.prototype.list_setFrozenColumns = function() {
 				var frozenTable = this.$canvas.find( '.table-frozen' );
-				var $table = this.$element.find( '.repeater-list table' );
+				var $wrapper = this.$element.find( '.repeater-canvas' );
+				var $table = this.$element.find( '.repeater-list .repeater-list-wrapper > table' );
 				var repeaterWrapper = this.$element.find( '.repeater-list' );
 				var numFrozenColumns = this.viewOptions.list_frozenColumns;
+				var self = this;
+
+				if ( this.viewOptions.list_selectable === 'multi' ) {
+					numFrozenColumns = numFrozenColumns + 1;
+					$wrapper.addClass( 'multi-select-enabled' );
+				}
 
 				if ( frozenTable.length < 1 ) {
 					//setup frozen column markup
@@ -5806,27 +5946,239 @@
 				this.$element.find( '.repeater-list table.table-frozen tr' ).each( function( i, elem ) {
 					$( this ).height( $table.find( 'tr:eq(' + i + ')' ).height() );
 				} );
+
 				var columnWidth = $table.find( 'td:eq(0)' ).outerWidth();
 				this.$element.find( '.frozen-column-wrapper, .frozen-thead-wrapper' ).width( columnWidth );
+
+				$( '.frozen-thead-wrapper .repeater-list-heading' ).on( 'click', function() {
+					var index = $( this ).parent( 'th' ).index();
+					index = index + 1;
+					self.$element.find( '.repeater-list-wrapper > table thead th:nth-child(' + index + ') .repeater-list-heading' )[ 0 ].click();
+				} );
+
+
 			};
 
-			$.fn.repeater.Constructor.prototype.list_positionFrozenColumns = function() {
+			$.fn.repeater.Constructor.prototype.list_positionColumns = function() {
 				var $wrapper = this.$element.find( '.repeater-canvas' );
 				var scrollTop = $wrapper.scrollTop();
 				var scrollLeft = $wrapper.scrollLeft();
+				var frozenEnabled = this.viewOptions.list_frozenColumns || this.viewOptions.list_selectable === 'multi';
+				var actionsEnabled = this.viewOptions.list_actions;
+
+				var canvasWidth = this.$element.find( '.repeater-canvas' ).outerWidth();
+				var tableWidth = this.$element.find( '.repeater-list .repeater-list-wrapper > table' ).outerWidth();
+
+				var actionsWidth = this.$element.find( '.table-actions' ) ? this.$element.find( '.table-actions' ).outerWidth() : 0;
+
+				var shouldScroll = ( tableWidth - ( canvasWidth - actionsWidth ) ) >= scrollLeft;
+
+
 				if ( scrollTop > 0 ) {
 					$wrapper.find( '.repeater-list-heading' ).css( 'top', scrollTop );
 				} else {
 					$wrapper.find( '.repeater-list-heading' ).css( 'top', '0' );
 				}
 				if ( scrollLeft > 0 ) {
-					$wrapper.find( '.frozen-thead-wrapper' ).css( 'left', scrollLeft );
-					$wrapper.find( '.frozen-column-wrapper' ).css( 'left', scrollLeft );
+					if ( frozenEnabled ) {
+						$wrapper.find( '.frozen-thead-wrapper' ).css( 'left', scrollLeft );
+						$wrapper.find( '.frozen-column-wrapper' ).css( 'left', scrollLeft );
+					}
+					if ( actionsEnabled && shouldScroll ) {
+						$wrapper.find( '.actions-column-wrapper' ).css( 'right', -scrollLeft );
+					}
+
 				} else {
-					$wrapper.find( '.frozen-thead-wrapper' ).css( 'left', '0' );
-					$wrapper.find( '.frozen-column-wrapper' ).css( 'left', '0' );
+					if ( frozenEnabled ) {
+						$wrapper.find( '.frozen-thead-wrapper' ).css( 'left', '0' );
+						$wrapper.find( '.frozen-column-wrapper' ).css( 'left', '0' );
+					}
+					if ( actionsEnabled ) {
+						$wrapper.find( '.actions-column-wrapper' ).css( 'right', '0' );
+					}
+				}
+			};
+
+			$.fn.repeater.Constructor.prototype.list_createItemActions = function() {
+				var actionsHtml = '';
+				var self = this;
+				var i, l;
+				var $table = this.$element.find( '.repeater-list .repeater-list-wrapper > table' );
+				var $actionsTable = this.$canvas.find( '.table-actions' );
+
+				for ( i = 0, l = this.viewOptions.list_actions.items.length; i < l; i++ ) {
+					var action = this.viewOptions.list_actions.items[ i ];
+					var html = action.html;
+
+					actionsHtml += '<li><a href="#" data-action="' + action.name + '" class="action-item"> ' + html + '</a></li>';
 				}
 
+				if ( $actionsTable.length < 1 ) {
+					var selectlist = '<div class="btn-group">' +
+						'<button type="button" class="btn btn-xs btn-default dropdown-toggle" data-toggle="dropdown" data-flip="auto" aria-expanded="false">' +
+						'<span class="caret"></span>' +
+						'</button>' +
+						'<ul class="dropdown-menu dropdown-menu-right" role="menu">' +
+						actionsHtml +
+						'</ul></div>';
+
+					// The width set here is overwritten in `list_sizeHeadings`. This is used for sizing the subsequent rows.
+					var $actionsColumnWrapper = $( '<div class="actions-column-wrapper" style="width: ' + this.list_actions_width + 'px"></div>' ).insertBefore( $table );
+					var $actionsColumn = $table.clone().addClass( 'table-actions' );
+					$actionsColumn.find( 'th:not(:last-child)' ).remove();
+					$actionsColumn.find( 'tr td:not(:last-child)' ).remove();
+
+					// Dont show actions dropdown in header if not multi select
+					if ( this.viewOptions.list_selectable === 'multi' ) {
+						$actionsColumn.find( 'thead tr' ).html( '<th><div class="repeater-list-heading">' + selectlist + '</div></th>' );
+						//disable the header dropdown until an item is selected
+						$actionsColumn.find( 'thead .btn' ).attr( 'disabled', 'disabled' );
+					} else {
+						var labelText = this.viewOptions.list_actions.label || '';
+
+						var $labelOverlay = $( '<div class="repeater-list-heading">' + labelText + '</div>' );
+
+						// repeater-list.less:302 has `margin-left: -9px;` which shifts this over and makes it not actually cover what it is supposed to cover. Make it wider to compensate.
+						var negative_margin_accomodation = 9;
+						$labelOverlay.data( 'forced-width', this.list_actions_width + negative_margin_accomodation );
+
+						var $th = $( '<th>' + labelText + '</th>' );
+						$th.append( $labelOverlay );
+
+						$actionsColumn.find( 'thead tr' ).addClass( 'empty-heading' ).html( $th );
+					}
+
+					// Create Actions dropdown for each cell in actions table
+					var $actionsCells = $actionsColumn.find( 'td' );
+
+					$actionsCells.each( function( i ) {
+						$( this ).html( selectlist );
+						$( this ).find( 'a' ).attr( 'data-row', parseInt( [ i ] ) + 1 );
+					} );
+
+					$actionsColumnWrapper.append( $actionsColumn );
+
+					this.$canvas.addClass( 'actions-enabled' );
+				}
+
+				this.$element.find( '.repeater-list table.table-actions thead tr th' ).outerHeight( $table.find( 'thead tr th' ).outerHeight() );
+				this.$element.find( '.repeater-list table.table-actions tbody tr td:first-child' ).each( function( i, elem ) {
+					$( this ).outerHeight( $table.find( 'tbody tr:eq(' + i + ') td' ).outerHeight() );
+				} );
+
+
+				//row level actions click
+				this.$element.find( '.table-actions tbody .action-item' ).on( 'click', function( e ) {
+					var actionName = $( this ).data( 'action' );
+					var row = $( this ).data( 'row' );
+					var selected = {
+						actionName: actionName,
+						rows: [ row ]
+					};
+					self.list_getActionItems( selected, e );
+				} );
+				// bulk actions click
+				this.$element.find( '.table-actions thead .action-item' ).on( 'click', function( e ) {
+					var actionName = $( this ).data( 'action' );
+					var selected = {
+						actionName: actionName,
+						rows: []
+					};
+					self.$element.find( '.repeater-list-wrapper > table .selected' ).each( function() {
+						var index = $( this ).index();
+						index = index + 1;
+						selected.rows.push( index );
+					} );
+
+					self.list_getActionItems( selected, e );
+				} );
+			};
+
+			/*
+			 * list_getActionItems
+			 *
+			 * Called when user clicks on an "action item".
+			 *
+			 * Object selected - object containing `actionName`, string value of the `data-action` attribute of the clicked
+			 *					"action item", and `rows` Array of jQuery objects of selected rows
+			 * Object e - jQuery event of triggering event
+			 *
+			 * Calls implementor's clickAction function if provided. Passes `selectedObj`, `callback` and `e`.
+			 *		Object selectedObj - Object containing jQuery object `item` for selected row, and Object `rowData` for
+			 *							selected row's data-attributes, or Array of such Objects if multiple selections were made
+			 *		Function callback - ¯\_(ツ)_/¯
+			 *		Object e - jQuery event object representing the triggering event
+			 */
+			$.fn.repeater.Constructor.prototype.list_getActionItems = function( selected, e ) {
+				var i;
+				var selectedObj = [];
+				var actionObj = $.grep( this.viewOptions.list_actions.items, function( actions ) {
+					return actions.name === selected.actionName;
+				} )[ 0 ];
+				for ( i = 0; i < selected.rows.length; i++ ) {
+					var clickedRow = this.$canvas.find( '.repeater-list-wrapper > table tbody tr:nth-child(' + selected.rows[ i ] + ')' );
+					selectedObj.push( {
+						item: clickedRow,
+						rowData: clickedRow.data( 'item_data' )
+					} );
+				}
+				if ( selectedObj.length === 1 ) {
+					selectedObj = selectedObj[ 0 ];
+				}
+
+				if ( actionObj.clickAction ) {
+					var callback = function callback() {}; // for backwards compatibility. No idea why this was originally here...
+					actionObj.clickAction( selectedObj, callback, e );
+				}
+			};
+
+			$.fn.repeater.Constructor.prototype.list_sizeActionsTable = function() {
+				var $table = this.$element.find( '.repeater-list-wrapper > table' );
+				var $actionsTableHeading = this.$element.find( '.repeater-list-wrapper .actions-column-wrapper thead th .repeater-list-heading' );
+				$actionsTableHeading.outerHeight( $table.find( 'thead th .repeater-list-heading' ).outerHeight() );
+			};
+
+			$.fn.repeater.Constructor.prototype.list_frozenOptionsInitialize = function() {
+				var self = this;
+				var isFrozen = this.viewOptions.list_frozenColumns;
+				var isActions = this.viewOptions.list_actions;
+				var isMulti = this.viewOptions.list_selectable === 'multi';
+
+				var $checkboxes = this.$element.find( '.frozen-column-wrapper .checkbox-inline' );
+
+				var $everyTable = this.$element.find( '.repeater-list table' );
+
+
+
+				//Make sure if row is hovered that it is shown in frozen column as well
+				this.$element.find( 'tr.selectable' ).on( 'mouseover mouseleave', function( e ) {
+					var index = $( this ).index();
+					index = index + 1;
+					if ( e.type === 'mouseover' ) {
+						$everyTable.find( 'tbody tr:nth-child(' + index + ')' ).addClass( 'hovered' );
+					} else {
+						$everyTable.find( 'tbody tr:nth-child(' + index + ')' ).removeClass( 'hovered' );
+					}
+				} );
+
+				$checkboxes.checkbox();
+
+				this.$element.find( '.table-frozen tbody .checkbox-inline' ).on( 'change', function( e ) {
+					e.preventDefault();
+					var row = $( this ).attr( 'data-row' );
+					row = parseInt( row ) + 1;
+					self.$element.find( '.repeater-list-wrapper > table tbody tr:nth-child(' + row + ')' ).click();
+				} );
+
+				this.$element.find( '.frozen-thead-wrapper thead .checkbox-inline' ).on( 'change', function() {
+					if ( $( this ).checkbox( 'isChecked' ) ) {
+						self.$element.find( '.repeater-list-wrapper > table tbody tr:not(.selected)' ).click();
+						self.$element.trigger( 'selected.fu.repeaterList', $checkboxes );
+					} else {
+						self.$element.find( '.repeater-list-wrapper > table tbody tr.selected' ).click();
+						self.$element.trigger( 'deselected.fu.repeaterList', $checkboxes );
+					}
+				} );
 			};
 
 			//ADDITIONAL DEFAULT OPTIONS
@@ -5840,7 +6192,8 @@
 				list_selectable: false,
 				list_sortClearing: false,
 				list_rowRendered: null,
-				list_frozenColumns: 0
+				list_frozenColumns: 0,
+				list_actions: false
 			} );
 
 			//EXTENSION DEFINITION
@@ -5862,11 +6215,17 @@
 				initialize: function( helpers, callback ) {
 					this.list_sortDirection = null;
 					this.list_sortProperty = null;
+					this.list_actions_width = ( this.viewOptions.list_actions.width !== undefined ) ? this.viewOptions.list_actions.width : 37;
+					this.list_noItems = false;
 					callback();
 				},
 				resize: function() {
-					if ( this.viewOptions.list_columnSyncing ) {
-						this.list_sizeHeadings();
+					if ( this.viewOptions.list_frozenColumns || this.viewOptions.list_actions ) {
+						this.render();
+					} else {
+						if ( this.viewOptions.list_columnSyncing ) {
+							this.list_sizeHeadings();
+						}
 					}
 				},
 				selected: function() {
@@ -5887,19 +6246,21 @@
 					var $table;
 
 					if ( $listContainer.length < 1 ) {
-						$listContainer = $( '<div class="repeater-list" data-preserve="shallow"><div class="repeater-list-wrapper" data-infinite="true" data-preserve="shallow"><table aria-readonly="true" class="table" data-preserve="shallow" role="grid"></table></div></div>' );
+						$listContainer = $( '<div class="repeater-list ' + specialBrowserClass() + '" data-preserve="shallow"><div class="repeater-list-wrapper" data-infinite="true" data-preserve="shallow"><table aria-readonly="true" class="table" data-preserve="shallow" role="grid"></table></div></div>' );
 						$listContainer.find( '.repeater-list-wrapper' ).on( 'scroll.fu.repeaterList', function() {
 							if ( self.viewOptions.list_columnSyncing ) {
 								self.list_positionHeadings();
 							}
 						} );
-						if ( self.viewOptions.list_frozenColumns ) {
+						if ( self.viewOptions.list_frozenColumns || self.viewOptions.list_actions || self.viewOptions.list_selectable === 'multi' ) {
 							helpers.container.on( 'scroll.fu.repeaterList', function() {
-								self.list_positionFrozenColumns();
+								self.list_positionColumns();
 							} );
 						}
+
 						helpers.container.append( $listContainer );
 					}
+					helpers.container.removeClass( 'actions-enabled actions-enabled multi-select-enabled' );
 
 					$table = $listContainer.find( 'table' );
 					renderThead.call( this, $table, helpers.data );
@@ -5908,23 +6269,32 @@
 					return false;
 				},
 				renderItem: function( helpers ) {
-					renderRow.call( this, helpers.container, helpers.subset, helpers.index );
+					renderRow.call( this, helpers.container, helpers.subset[ helpers.index ], helpers.index );
 					return false;
 				},
 				after: function() {
 					var $sorted;
+
+					if ( ( this.viewOptions.list_frozenColumns || this.viewOptions.list_selectable === 'multi' ) && !this.list_noItems ) {
+						this.list_setFrozenColumns();
+					}
+
+					if ( this.viewOptions.list_actions && !this.list_noItems ) {
+						this.list_createItemActions();
+						this.list_sizeActionsTable();
+					}
+
+					if ( ( this.viewOptions.list_frozenColumns || this.viewOptions.list_actions || this.viewOptions.list_selectable === 'multi' ) && !this.list_noItems ) {
+						this.list_positionColumns();
+						this.list_frozenOptionsInitialize();
+					}
 
 					if ( this.viewOptions.list_columnSyncing ) {
 						this.list_sizeHeadings();
 						this.list_positionHeadings();
 					}
 
-					if ( this.viewOptions.list_frozenColumns ) {
-						this.list_setFrozenColumns();
-						this.list_positionFrozenColumns();
-					}
-
-					$sorted = this.$canvas.find( '.repeater-list-heading.sorted' );
+					$sorted = this.$canvas.find( '.repeater-list-wrapper > table .repeater-list-heading.sorted' );
 					if ( $sorted.length > 0 ) {
 						this.list_highlightColumn( $sorted.data( 'fu_item_index' ) );
 					}
@@ -5935,132 +6305,235 @@
 		}
 
 		//ADDITIONAL METHODS
-		function renderColumn( $row, rows, rowIndex, columns, columnIndex ) {
-			var className = columns[ columnIndex ].className;
-			var content = rows[ rowIndex ][ columns[ columnIndex ].property ];
+		function renderColumn( $tr, row, rowIndex, column ) {
+			var content = row[ column.property ];
 			var $col = $( '<td></td>' );
-			var width = columns[ columnIndex ]._auto_width;
 
-			$col.addClass( ( ( className !== undefined ) ? className : '' ) ).append( content );
-			if ( width !== undefined ) {
-				$col.outerWidth( width );
+			$col.addClass( column.className );
+
+			if ( this.viewOptions.list_actions !== false && column.property === '@_ACTIONS_@' ) {
+				$col.addClass( 'repeater-list-actions-placeholder-column' );
+				content = '';
 			}
-			$row.append( $col );
 
-			if ( this.viewOptions.list_columnRendered ) {
+			content = ( content !== undefined ) ? content : '';
+			$col.append( content );
+
+			// excludes checkbox and actions columns, as well as columns with user set widths
+			if ( column._auto_width !== undefined ) {
+				$col.outerWidth( column._auto_width );
+			}
+
+			$tr.append( $col );
+
+			if ( this.viewOptions.list_selectable === 'multi' && column.property === '@_CHECKBOX_@' ) {
+				var checkBoxMarkup = '<label data-row="' + rowIndex + '" class="checkbox-custom checkbox-inline body-checkbox">' +
+					'<input class="sr-only" type="checkbox"></label>';
+
+				$col.html( checkBoxMarkup );
+			}
+
+			if ( !( column.property === '@_CHECKBOX_@' || column.property === '@_ACTIONS_@' ) && this.viewOptions.list_columnRendered ) {
 				this.viewOptions.list_columnRendered( {
-					container: $row,
-					columnAttr: columns[ columnIndex ].property,
+					container: $tr,
+					columnAttr: column.property,
 					item: $col,
-					rowData: rows[ rowIndex ]
+					rowData: row
 				}, function() {} );
 			}
 		}
 
-		function renderHeader( $tr, columns, index ) {
+		/*
+		 * Handle column header click to do sort.
+		 *
+		 * This function was extracted from the renderHeader function in this file
+		 *
+		 * Expects:
+		 * e.data.$headerOverlay - visible/clickable header overlay
+		 * e.data.$headerBase - sizer `<th>` element
+		 * e.data.column - object representing raw data for clicked column
+		 * e.data.$tr - `<tr>` from `<thead>`
+		 * e.data.self - `this` context of the `renderHeader` function
+		 */
+		var handleColumnSort = function handleColumnSort( e ) {
+			var self = e.data.self;
+			// Create a new jQuery object as set of both elements.
+			var $headers = e.data.$headerOverlay.add( e.data.$headerBase );
+			var $chevron = e.data.$headerOverlay.find( '.glyphicon.rlc:first' );
+			var $tr = e.data.$tr;
+			var column = e.data.column;
+
+			self.list_sortProperty = ( typeof column.sortable === 'string' ) ? column.sortable : column.property;
+
 			var chevDown = 'glyphicon-chevron-down';
-			var chevron = '.glyphicon.rlc:first';
 			var chevUp = 'glyphicon-chevron-up';
-			var $div = $( '<div class="repeater-list-heading"><span class="glyphicon rlc"></span></div>' );
-			var $header = $( '<th></th>' );
-			var self = this;
-			var $both, className, sortable, $span, $spans;
-
-			$div.data( 'fu_item_index', index );
-			$div.prepend( columns[ index ].label );
-			$header.html( $div.html() ).find( '[id]' ).removeAttr( 'id' );
-			$header.append( $div );
-
-			$both = $header.add( $div );
-			$span = $div.find( chevron );
-			$spans = $span.add( $header.find( chevron ) );
-
-			className = columns[ index ].className;
-			if ( className !== undefined ) {
-				$both.addClass( className );
-			}
-
-			sortable = columns[ index ].sortable;
-			if ( sortable ) {
-				$both.addClass( 'sortable' );
-				$div.on( 'click.fu.repeaterList', function() {
-					self.list_sortProperty = ( typeof sortable === 'string' ) ? sortable : columns[ index ].property;
-					if ( $div.hasClass( 'sorted' ) ) {
-						if ( $span.hasClass( chevUp ) ) {
-							$spans.removeClass( chevUp ).addClass( chevDown );
-							self.list_sortDirection = 'desc';
-						} else {
-							if ( !self.viewOptions.list_sortClearing ) {
-								$spans.removeClass( chevDown ).addClass( chevUp );
-								self.list_sortDirection = 'asc';
-							} else {
-								$both.removeClass( 'sorted' );
-								$spans.removeClass( chevDown );
-								self.list_sortDirection = null;
-								self.list_sortProperty = null;
-							}
-						}
-
-					} else {
-						$tr.find( 'th, .repeater-list-heading' ).removeClass( 'sorted' );
-						$spans.removeClass( chevDown ).addClass( chevUp );
+			if ( $headers.hasClass( 'sorted' ) ) {
+				if ( $chevron.hasClass( chevUp ) ) {
+					$chevron.removeClass( chevUp ).addClass( chevDown );
+					self.list_sortDirection = 'desc';
+				} else {
+					if ( !self.viewOptions.list_sortClearing ) {
+						$chevron.removeClass( chevDown ).addClass( chevUp );
 						self.list_sortDirection = 'asc';
-						$both.addClass( 'sorted' );
+					} else {
+						$headers.removeClass( 'sorted' );
+						$chevron.removeClass( chevDown );
+						self.list_sortDirection = null;
+						self.list_sortProperty = null;
 					}
-
-					self.render( {
-						clearInfinite: true,
-						pageIncrement: null
-					} );
-				} );
+				}
+			} else {
+				$tr.find( 'th, .repeater-list-heading' ).removeClass( 'sorted' );
+				$chevron.removeClass( chevDown ).addClass( chevUp );
+				self.list_sortDirection = 'asc';
+				$headers.addClass( 'sorted' );
 			}
 
-			if ( columns[ index ].sortDirection === 'asc' || columns[ index ].sortDirection === 'desc' ) {
+			self.render( {
+				clearInfinite: true,
+				pageIncrement: null
+			} );
+		};
+
+		var renderHeader = function renderHeader( $tr, column, columnIndex ) {
+			var self = this;
+
+			// visible portion (top layer) of header
+			var $headerOverlay = $( '<div class="repeater-list-heading"><span class="glyphicon rlc"></span></div>' );
+			$headerOverlay.data( 'fu_item_index', columnIndex );
+			$headerOverlay.prepend( column.label );
+
+			// header underlayment
+			var $headerBase = $( '<th></th>' );
+
+			// actions column is _always_ hidden underneath absolute positioned actions table.
+			// Neither headerBase nor headerOverlay will ever be visible for actions column.
+			// This is here strictly for sizing purposes for the benefit of the other columns'
+			// sizing calculations.
+			if ( this.viewOptions.list_actions && column.property === '@_ACTIONS_@' ) {
+				var width = this.list_actions_width;
+				$headerBase.css( 'width', width );
+				$headerOverlay.css( 'width', width );
+			}
+
+			var headerClasses = [];
+			headerClasses.push( column.className );
+
+			var sortable = column.sortable;
+			if ( sortable ) {
+				headerClasses.push( 'sortable' );
+
+				$headerOverlay.on(
+					'click.fu.repeaterList', {
+						'self': self,
+						'$tr': $tr,
+						'$headerBase': $headerBase,
+						'$headerOverlay': $headerOverlay,
+						'column': column
+					},
+					handleColumnSort
+				);
+			}
+
+			var $chevron = $headerOverlay.find( '.glyphicon.rlc:first' );
+
+			if ( column.sortDirection === 'asc' || column.sortDirection === 'desc' ) {
 				$tr.find( 'th, .repeater-list-heading' ).removeClass( 'sorted' );
-				$both.addClass( 'sortable sorted' );
-				if ( columns[ index ].sortDirection === 'asc' ) {
-					$spans.addClass( chevUp );
+
+				headerClasses.push( 'sortable sorted' );
+
+				if ( column.sortDirection === 'asc' ) {
+					$chevron.addClass( 'glyphicon-chevron-up' );
 					this.list_sortDirection = 'asc';
 				} else {
-					$spans.addClass( chevDown );
+					$chevron.addClass( 'glyphicon-chevron-down' );
 					this.list_sortDirection = 'desc';
 				}
 
-				this.list_sortProperty = ( typeof sortable === 'string' ) ? sortable : columns[ index ].property;
+				this.list_sortProperty = ( typeof sortable === 'string' ) ? sortable : column.property;
 			}
 
-			$tr.append( $header );
-		}
+			// duplicate the header's overlay content into the header if appropriate (possibly for dimensional styling???)
+			$headerBase.html( $headerOverlay.html() );
 
-		function renderRow( $tbody, rows, index ) {
+			// place visible content into header for display to user
+			if ( column.property !== '@_CHECKBOX_@' ) {
+				$headerBase.append( $headerOverlay );
+			} else {
+				var checkBoxMarkup = '<div class="repeater-list-heading header-checkbox"><label class="checkbox-custom checkbox-inline"><input class="sr-only" type="checkbox"></label><div class="clearfix"></div></div>';
+				$headerBase.append( checkBoxMarkup );
+			}
+
+			headerClasses = headerClasses.join( ' ' );
+			$headerBase.addClass( headerClasses );
+			$headerOverlay.addClass( headerClasses );
+
+			$tr.append( $headerBase );
+		};
+
+		function renderRow( $tbody, row, rowIndex ) {
 			var $row = $( '<tr></tr>' );
 			var self = this;
 			var i, l;
+			var isMulti = this.viewOptions.list_selectable === 'multi';
+			var isActions = this.viewOptions.list_actions;
 
 			if ( this.viewOptions.list_selectable ) {
 				$row.addClass( 'selectable' );
 				$row.attr( 'tabindex', 0 ); // allow items to be tabbed to / focused on
-				$row.data( 'item_data', rows[ index ] );
+				$row.data( 'item_data', row );
+
 				$row.on( 'click.fu.repeaterList', function() {
 					var $item = $( this );
-					if ( $item.hasClass( 'selected' ) ) {
+					var index = $( this ).index();
+					index = index + 1;
+					var $frozenRow = self.$element.find( '.frozen-column-wrapper tr:nth-child(' + index + ')' );
+					var $actionsRow = self.$element.find( '.actions-column-wrapper tr:nth-child(' + index + ')' );
+					var $checkBox = self.$element.find( '.frozen-column-wrapper tr:nth-child(' + index + ') .checkbox-inline' );
+
+					if ( $item.is( '.selected' ) ) {
 						$item.removeClass( 'selected' );
-						$item.find( '.repeater-list-check' ).remove();
+						if ( isMulti ) {
+							$checkBox.checkbox( 'uncheck' );
+							$frozenRow.removeClass( 'selected' );
+							if ( isActions ) {
+								$actionsRow.removeClass( 'selected' );
+							}
+						} else {
+							$item.find( '.repeater-list-check' ).remove();
+						}
+
 						self.$element.trigger( 'deselected.fu.repeaterList', $item );
 					} else {
-						if ( self.viewOptions.list_selectable !== 'multi' ) {
+						if ( !isMulti ) {
 							self.$canvas.find( '.repeater-list-check' ).remove();
 							self.$canvas.find( '.repeater-list tbody tr.selected' ).each( function() {
 								$( this ).removeClass( 'selected' );
 								self.$element.trigger( 'deselected.fu.repeaterList', $( this ) );
 							} );
+							$item.find( 'td:first' ).prepend( '<div class="repeater-list-check"><span class="glyphicon glyphicon-ok"></span></div>' );
+							$item.addClass( 'selected' );
+							$frozenRow.addClass( 'selected' );
+						} else {
+							$checkBox.checkbox( 'check' );
+							$item.addClass( 'selected' );
+							$frozenRow.addClass( 'selected' );
+							if ( isActions ) {
+								$actionsRow.addClass( 'selected' );
+							}
 						}
-
-						$item.addClass( 'selected' );
-						$item.find( 'td:first' ).prepend( '<div class="repeater-list-check"><span class="glyphicon glyphicon-ok"></span></div>' );
 						self.$element.trigger( 'selected.fu.repeaterList', $item );
 					}
+					var $selected = self.$canvas.find( '.repeater-list-wrapper > table .selected' );
+					var $actionsColumn = self.$element.find( '.table-actions' );
+
+					if ( $selected.length > 0 ) {
+						$actionsColumn.find( 'thead .btn' ).removeAttr( 'disabled' );
+					} else {
+						$actionsColumn.find( 'thead .btn' ).attr( 'disabled', 'disabled' );
+					}
 				} );
+
 				// allow selection via enter key
 				$row.keyup( function( e ) {
 					if ( e.keyCode === 13 ) {
@@ -6070,17 +6543,21 @@
 				} );
 			}
 
+			if ( this.viewOptions.list_actions && !this.viewOptions.list_selectable ) {
+				$row.data( 'item_data', row );
+			}
+
 			$tbody.append( $row );
 
-			for ( i = 0, l = this.list_columns.length; i < l; i++ ) {
-				renderColumn.call( this, $row, rows, index, this.list_columns, i );
+			for ( i = 0; i < this.list_columns.length; i++ ) {
+				renderColumn.call( this, $row, row, rowIndex, this.list_columns[ i ] );
 			}
 
 			if ( this.viewOptions.list_rowRendered ) {
 				this.viewOptions.list_rowRendered( {
 					container: $tbody,
 					item: $row,
-					rowData: rows[ index ]
+					rowData: row
 				}, function() {} );
 			}
 		}
@@ -6094,102 +6571,160 @@
 				$table.append( $tbody );
 			}
 
-			if ( data.items && data.items.length < 1 ) {
+			if ( typeof data.error === 'string' && data.error.length > 0 ) {
+				$empty = $( '<tr class="empty text-danger"><td colspan="' + this.list_columns.length + '"></td></tr>' );
+				$empty.find( 'td' ).append( data.error );
+				$tbody.append( $empty );
+			} else if ( data.items && data.items.length < 1 ) {
 				$empty = $( '<tr class="empty"><td colspan="' + this.list_columns.length + '"></td></tr>' );
 				$empty.find( 'td' ).append( this.viewOptions.list_noItemsHTML );
 				$tbody.append( $empty );
 			}
 		}
 
-		function renderThead( $table, data ) {
-			var columns = data.columns || [];
-			var i, j, l, $thead, $tr;
-
-			function differentColumns( oldCols, newCols ) {
-				if ( !newCols ) {
-					return false;
-				}
-				if ( !oldCols || ( newCols.length !== oldCols.length ) ) {
-					return true;
-				}
-				for ( i = 0, l = newCols.length; i < l; i++ ) {
-					if ( !oldCols[ i ] ) {
-						return true;
-					} else {
-						for ( j in newCols[ i ] ) {
-							if ( oldCols[ i ][ j ] !== newCols[ i ][ j ] ) {
-								return true;
-							}
-
-						}
-					}
-
-				}
+		var areDifferentColumns = function areDifferentColumns( oldCols, newCols ) {
+			if ( !newCols ) {
 				return false;
 			}
+			if ( !oldCols || ( newCols.length !== oldCols.length ) ) {
+				return true;
+			}
+			for ( var i = 0; i < newCols.length; i++ ) {
+				if ( !oldCols[ i ] ) {
+					return true;
+				} else {
+					for ( var j in newCols[ i ] ) {
+						if ( oldCols[ i ][ j ] !== newCols[ i ][ j ] ) {
+							return true;
+						}
 
-			if ( this.list_firstRender || differentColumns( this.list_columns, columns ) ) {
-				$table.find( 'thead' ).remove();
+					}
+				}
 
-				this.list_columns = columns;
+			}
+			return false;
+		};
+
+		var renderThead = function renderThead( $table, data ) {
+			var columns = data.columns || [];
+			var $thead = $table.find( 'thead' );
+
+			if ( this.list_firstRender || areDifferentColumns( this.list_columns, columns ) || $thead.length === 0 ) {
+				$thead.remove();
+
 				this.list_firstRender = false;
 				this.$loader.removeClass( 'noHeader' );
 
-				$thead = $( '<thead data-preserve="deep"><tr></tr></thead>' );
-				$tr = $thead.find( 'tr' );
-				for ( i = 0, l = columns.length; i < l; i++ ) {
-					renderHeader.call( this, $tr, columns, i );
+				if ( data.count < 1 ) {
+					this.list_noItems = true;
 				}
+
+				// insert checkbox column, if applicable
+				if ( this.viewOptions.list_selectable === 'multi' && !this.list_noItems ) {
+					var checkboxColumn = {
+						label: 'c',
+						property: '@_CHECKBOX_@',
+						sortable: false
+					};
+					columns.unshift( checkboxColumn );
+				}
+
+				// insert actions column, if applicable
+				if ( this.viewOptions.list_actions && !this.list_noItems ) {
+					var actionsColumn = {
+						label: this.viewOptions.list_actions.label || '',
+						property: '@_ACTIONS_@',
+						sortable: false,
+						width: this.list_actions_width
+					};
+					columns.push( actionsColumn );
+				}
+
+				this.list_columns = columns;
+
+				var $headerRow = $( '<tr></tr>' );
+				for ( var i = 0; i < columns.length; i++ ) {
+					renderHeader.call( this, $headerRow, columns[ i ], i );
+				}
+
+				$thead = $( '<thead data-preserve="deep"></thead>' );
+				$thead.append( $headerRow );
 				$table.prepend( $thead );
 
-				sizeColumns.call( this, $tr );
+				// after checkbox column is created need to get width of checkbox column from its css class
+				if ( this.viewOptions.list_selectable === 'multi' && !this.list_noItems ) {
+					var checkboxWidth = this.$element.find( '.repeater-list-wrapper .header-checkbox' ).outerWidth();
+					columns[ 0 ].width = checkboxWidth;
+				}
+
+				sizeColumns.call( this, $headerRow );
 			}
-		}
+		};
 
-		function sizeColumns( $tr ) {
-			var auto = [];
+		var sizeColumns = function sizeColumns( $tr ) {
+			var autoGauge = [];
 			var self = this;
-			var i, l, newWidth, taken;
+			var takenWidth = 0;
+			var totalWidth = 0;
 
-			if ( this.viewOptions.list_columnSizing ) {
-				i = 0;
-				taken = 0;
-				$tr.find( 'th' ).each( function() {
-					var $th = $( this );
-					var isLast = ( $th.next( 'th' ).length === 0 );
-					var width;
+			if ( self.viewOptions.list_columnSizing ) {
+				$tr.find( 'th' ).each( function( i, th ) {
+					var $th = $( th );
+					var isLast = ( $( this ).next( 'th' ).length === 0 );
+
 					if ( self.list_columns[ i ].width !== undefined ) {
-						width = self.list_columns[ i ].width;
-						$th.outerWidth( width );
-						taken += $th.outerWidth();
+						var width = self.list_columns[ i ].width;
+
+						takenWidth += width;
+						totalWidth += width;
+
 						if ( !isLast ) {
+							$th.outerWidth( width );
 							self.list_columns[ i ]._auto_width = width;
 						} else {
-							$th.outerWidth( '' );
+							$th.outerWidth( '' ); // why does this work? This is invalid jQuery.
 						}
-
 					} else {
-						auto.push( {
+						totalWidth += $th.outerWidth();
+
+						autoGauge.push( {
 							col: $th,
 							index: i,
-							last: isLast
+							last: isLast,
+							minWidth: $th.find( '.repeater-list-heading' ).outerWidth()
 						} );
 					}
-
-					i++;
 				} );
 
-				l = auto.length;
-				if ( l > 0 ) {
-					newWidth = Math.floor( ( this.$canvas.width() - taken ) / l );
-					for ( i = 0; i < l; i++ ) {
-						if ( !auto[ i ].last ) {
-							auto[ i ].col.outerWidth( newWidth );
-							this.list_columns[ auto[ i ].index ]._auto_width = newWidth;
-						}
+				var canvasWidth = self.$canvas.find( '.repeater-list-wrapper' ).outerWidth();
+				var newWidth = Math.floor( ( canvasWidth - takenWidth ) / autoGauge.length );
 
+				for ( var i = 0; i < autoGauge.length; i++ ) {
+					var th = autoGauge[ i ];
+
+					if ( newWidth < th.minWidth ) {
+						newWidth = th.minWidth;
+					}
+
+					if ( !th.last || canvasWidth < totalWidth ) {
+						th.col.outerWidth( newWidth );
+						self.list_columns[ th.index ]._auto_width = newWidth;
 					}
 				}
+			}
+		};
+
+		function specialBrowserClass() {
+			var ua = window.navigator.userAgent;
+			var msie = ua.indexOf( "MSIE " );
+			var firefox = ua.indexOf( 'Firefox' );
+
+			if ( msie > 0 ) {
+				return 'ie-' + parseInt( ua.substring( msie + 5, ua.indexOf( ".", msie ) ) );
+			} else if ( firefox > 0 ) {
+				return 'firefox';
+			} else {
+				return '';
 			}
 		}
 
@@ -6440,7 +6975,7 @@
 
 		// SCHEDULER CONSTRUCTOR AND PROTOTYPE
 
-		var Scheduler = function( element, options ) {
+		var Scheduler = function Scheduler( element, options ) {
 			var self = this;
 
 			this.$element = $( element );
@@ -6472,6 +7007,10 @@
 			//initialize sub-controls
 			this.$element.find( '.selectlist' ).selectlist();
 			this.$startDate.datepicker( this.options.startDateOptions );
+
+			var startDateResponse = ( typeof this.options.startDateChanged === "function" ) ? this.options.startDateChanged : this._guessEndDate;
+			this.$startDate.on( 'change changed.fu.datepicker dateClicked.fu.datepicker', $.proxy( startDateResponse, this ) );
+
 			this.$startTime.combobox();
 			// init start time
 			if ( this.$startTime.find( 'input' ).val() === '' ) {
@@ -6482,17 +7021,20 @@
 			if ( this.$repeatIntervalSpinbox.find( 'input' ).val() === '0' ) {
 				this.$repeatIntervalSpinbox.spinbox( {
 					'value': 1,
-					'min': 1
+					'min': 1,
+					'limitToStep': true
 				} );
 			} else {
 				this.$repeatIntervalSpinbox.spinbox( {
-					'min': 1
+					'min': 1,
+					'limitToStep': true
 				} );
 			}
 
 			this.$endAfter.spinbox( {
 				'value': 1,
-				'min': 1
+				'min': 1,
+				'limitToStep': true
 			} );
 			this.$endDate.datepicker( this.options.endDateOptions );
 			this.$element.find( '.radio-custom' ).radio();
@@ -6505,15 +7047,52 @@
 			} );
 			this.$element.find( '.combobox' ).on( 'changed.fu.combobox', $.proxy( this.changed, this ) );
 			this.$element.find( '.datepicker' ).on( 'changed.fu.datepicker', $.proxy( this.changed, this ) );
+			this.$element.find( '.datepicker' ).on( 'dateClicked.fu.datepicker', $.proxy( this.changed, this ) );
 			this.$element.find( '.selectlist' ).on( 'changed.fu.selectlist', $.proxy( this.changed, this ) );
 			this.$element.find( '.spinbox' ).on( 'changed.fu.spinbox', $.proxy( this.changed, this ) );
 			this.$element.find( '.repeat-monthly .radio-custom, .repeat-yearly .radio-custom' ).on( 'change.fu.scheduler', $.proxy( this.changed, this ) );
 		};
 
+		var _getFormattedDate = function _getFormattedDate( dateObj, dash ) {
+			var fdate = '';
+			var item;
+
+			fdate += dateObj.getFullYear();
+			fdate += dash;
+			item = dateObj.getMonth() + 1; //because 0 indexing makes sense when dealing with months /sarcasm
+			fdate += ( item < 10 ) ? '0' + item : item;
+			fdate += dash;
+			item = dateObj.getDate();
+			fdate += ( item < 10 ) ? '0' + item : item;
+
+			return fdate;
+		};
+
+		var ONE_SECOND = 1000;
+		var ONE_MINUTE = ONE_SECOND * 60;
+		var ONE_HOUR = ONE_MINUTE * 60;
+		var ONE_DAY = ONE_HOUR * 24;
+		var ONE_WEEK = ONE_DAY * 7;
+		var ONE_MONTH = ONE_WEEK * 5; // No good way to increment by one month using vanilla JS. Since this is an end date, we only need to ensure that this date occurs after at least one or more repeat increments, but there is no reason for it to be exact.
+		var ONE_YEAR = ONE_WEEK * 52;
+		var INTERVALS = {
+			secondly: ONE_SECOND,
+			minutely: ONE_MINUTE,
+			hourly: ONE_HOUR,
+			daily: ONE_DAY,
+			weekly: ONE_WEEK,
+			monthly: ONE_MONTH,
+			yearly: ONE_YEAR
+		};
+
+		var _incrementDate = function _incrementDate( start, end, interval, increment ) {
+			return new Date( start.getTime() + ( INTERVALS[ interval ] * increment ) );
+		};
+
 		Scheduler.prototype = {
 			constructor: Scheduler,
 
-			destroy: function() {
+			destroy: function destroy() {
 				var markup;
 				// set input value attribute
 				this.$element.find( 'input' ).each( function() {
@@ -6539,7 +7118,7 @@
 				return markup;
 			},
 
-			changed: function( e, data, propagate ) {
+			changed: function changed( e, data, propagate ) {
 				if ( !propagate ) {
 					e.stopPropagation();
 				}
@@ -6551,15 +7130,15 @@
 				} );
 			},
 
-			disable: function() {
+			disable: function disable() {
 				this.toggleState( 'disable' );
 			},
 
-			enable: function() {
+			enable: function enable() {
 				this.toggleState( 'enable' );
 			},
 
-			setUtcTime: function( d, t, offset ) {
+			setUtcTime: function setUtcTime( d, t, offset ) {
 				var date = d.split( '-' );
 				var time = t.split( ':' );
 
@@ -6598,7 +7177,7 @@
 
 			// called when the end range changes
 			// (Never, After, On date)
-			endSelectChanged: function( e, data ) {
+			endSelectChanged: function endSelectChanged( e, data ) {
 				var selectedItem, val;
 
 				if ( !data ) {
@@ -6624,8 +7203,35 @@
 				}
 			},
 
-			getValue: function() {
-				// FREQ = frequency (hourly, daily, monthly...)
+			_guessEndDate: function _guessEndDate() {
+				var interval = this.$repeatIntervalSelect.selectlist( 'selectedItem' ).value;
+				var end = new Date( this.$endDate.datepicker( 'getDate' ) );
+				var start = new Date( this.$startDate.datepicker( 'getDate' ) );
+				var increment = this.$repeatIntervalSpinbox.find( 'input' ).val();
+
+				if ( interval !== "none" && end <= start ) {
+					// if increment spinbox is hidden, user has no idea what it is set to and it is probably not set to
+					// something they intended. Safest option is to set date forward by an increment of 1.
+					// this will keep monthly & yearly from auto-incrementing by more than a single interval
+					if ( !this.$repeatIntervalSpinbox.is( ':visible' ) ) {
+						increment = 1;
+					}
+
+					// treat weekdays as weekly. This treats all "weekdays" as a single set, of which a single increment
+					// is one week.
+					if ( interval === "weekdays" ) {
+						increment = 1;
+						interval = "weekly";
+					}
+
+					end = _incrementDate( start, end, interval, increment );
+
+					this.$endDate.datepicker( 'setDate', end );
+				}
+			},
+
+			getValue: function getValue() {
+				// FREQ = frequency (secondly, minutely, hourly, daily, weekdays, weekly, monthly, yearly)
 				// BYDAY = when picking days (MO,TU,WE,etc)
 				// BYMONTH = when picking months (Jan,Feb,March) - note the values should be 1,2,3...
 				// BYMONTHDAY = when picking days of the month (1,2,3...)
@@ -6645,26 +7251,9 @@
 				}
 
 				var timeZone = this.$timeZone.selectlist( 'selectedItem' );
-				var getFormattedDate;
-
-				getFormattedDate = function( dateObj, dash ) {
-					var fdate = '';
-					var item;
-
-					fdate += dateObj.getFullYear();
-					fdate += dash;
-					item = dateObj.getMonth() + 1; //because 0 indexing makes sense when dealing with months /sarcasm
-					fdate += ( item < 10 ) ? '0' + item : item;
-					fdate += dash;
-					item = dateObj.getDate();
-					fdate += ( item < 10 ) ? '0' + item : item;
-
-					return fdate;
-				};
-
 				var day, days, hasAm, hasPm, month, pos, startDateTime, type;
 
-				startDateTime = '' + getFormattedDate( this.$startDate.datepicker( 'getDate' ), '-' );
+				startDateTime = '' + _getFormattedDate( this.$startDate.datepicker( 'getDate' ), '-' );
 
 				startDateTime += 'T';
 				hasAm = ( startTime.search( 'am' ) >= 0 );
@@ -6686,6 +7275,12 @@
 
 				if ( repeat === 'none' ) {
 					pattern = 'FREQ=DAILY;INTERVAL=1;COUNT=1;';
+				} else if ( repeat === 'secondly' ) {
+					pattern = 'FREQ=SECONDLY;';
+					pattern += 'INTERVAL=' + interval + ';';
+				} else if ( repeat === 'minutely' ) {
+					pattern = 'FREQ=MINUTELY;';
+					pattern += 'INTERVAL=' + interval + ';';
 				} else if ( repeat === 'hourly' ) {
 					pattern = 'FREQ=HOURLY;';
 					pattern += 'INTERVAL=' + interval + ';';
@@ -6714,8 +7309,8 @@
 						day = parseInt( this.$element.find( '.repeat-monthly-date .selectlist' ).selectlist( 'selectedItem' ).text, 10 );
 						pattern += 'BYMONTHDAY=' + day + ';';
 					} else if ( type === 'bysetpos' ) {
-						days = this.$element.find( '.month-days' ).selectlist( 'selectedItem' ).value;
-						pos = this.$element.find( '.month-day-pos' ).selectlist( 'selectedItem' ).value;
+						days = this.$element.find( '.repeat-monthly-day .month-days' ).selectlist( 'selectedItem' ).value;
+						pos = this.$element.find( '.repeat-monthly-day .month-day-pos' ).selectlist( 'selectedItem' ).value;
 						pattern += 'BYDAY=' + days + ';';
 						pattern += 'BYSETPOS=' + pos + ';';
 					}
@@ -6725,13 +7320,15 @@
 					type = this.$element.find( 'input[name=repeat-yearly]:checked' ).val();
 
 					if ( type === 'bymonthday' ) {
+						// there are multiple .year-month classed elements in scheduler markup
 						month = this.$element.find( '.repeat-yearly-date .year-month' ).selectlist( 'selectedItem' ).value;
-						day = this.$element.find( '.year-month-day' ).selectlist( 'selectedItem' ).text;
+						day = this.$element.find( '.repeat-yearly-date .year-month-day' ).selectlist( 'selectedItem' ).text;
 						pattern += 'BYMONTH=' + month + ';';
 						pattern += 'BYMONTHDAY=' + day + ';';
 					} else if ( type === 'bysetpos' ) {
-						days = this.$element.find( '.year-month-days' ).selectlist( 'selectedItem' ).value;
-						pos = this.$element.find( '.year-month-day-pos' ).selectlist( 'selectedItem' ).value;
+						days = this.$element.find( '.repeat-yearly-day .year-month-days' ).selectlist( 'selectedItem' ).value;
+						pos = this.$element.find( '.repeat-yearly-day .year-month-day-pos' ).selectlist( 'selectedItem' ).value;
+						// there are multiple .year-month classed elements in scheduler markup
 						month = this.$element.find( '.repeat-yearly-day .year-month' ).selectlist( 'selectedItem' ).value;
 
 						pattern += 'BYDAY=' + days + ';';
@@ -6750,19 +7347,18 @@
 					if ( end === 'after' ) {
 						duration = 'COUNT=' + this.$endAfter.spinbox( 'value' ) + ';';
 					} else if ( end === 'date' ) {
-						duration = 'UNTIL=' + getFormattedDate( this.$endDate.datepicker( 'getDate' ), '' ) + ';';
+						duration = 'UNTIL=' + _getFormattedDate( this.$endDate.datepicker( 'getDate' ), '' ) + ';';
 					}
 
 				}
 
 				pattern += duration;
+				// remove trailing semicolon
+				pattern = pattern.substring( pattern.length - 1 ) === ';' ? pattern.substring( 0, pattern.length - 1 ) : pattern;
 
 				var data = {
 					startDateTime: startDateTime,
-					timeZone: {
-						name: timeZone.name,
-						offset: timeZone.offset
-					},
+					timeZone: timeZone,
 					recurrencePattern: pattern
 				};
 
@@ -6771,13 +7367,13 @@
 
 			// called when the repeat interval changes
 			// (None, Hourly, Daily, Weekdays, Weekly, Monthly, Yearly
-			repeatIntervalSelectChanged: function( e, data ) {
+			repeatIntervalSelectChanged: function repeatIntervalSelectChanged( e, data ) {
 				var selectedItem, val, txt;
 
 				if ( !data ) {
 					selectedItem = this.$repeatIntervalSelect.selectlist( 'selectedItem' );
-					val = selectedItem.value;
-					txt = selectedItem.text;
+					val = selectedItem.value || "";
+					txt = selectedItem.text || "";
 				} else {
 					val = data.value;
 					txt = data.text;
@@ -6817,9 +7413,11 @@
 					this.$end.removeClass( 'hide hidden' ); // hide is deprecated
 					this.$end.attr( 'aria-hidden', 'false' );
 				}
+
+				this._guessEndDate();
 			},
 
-			setValue: function( options ) {
+			setValue: function setValue( options ) {
 				var hours, i, item, l, minutes, period, recur, temp, startDate, startTime, timeOffset;
 
 				if ( options.startDateTime ) {
@@ -6852,19 +7450,17 @@
 					startDate = currentDate.getFullYear() + '-' + currentDate.getMonth() + '-' + currentDate.getDate();
 				}
 
-				item = 'li[data';
+				// create jQuery selection string for timezone object
+				// based on data-attributes and pass to selectlist
+				item = 'li';
 				if ( options.timeZone ) {
 					if ( typeof( options.timeZone ) === 'string' ) {
-						item += '-name="' + options.timeZone;
+						item += '[data-name="' + options.timeZone + '"]';
 					} else {
-						if ( options.timeZone.name ) {
-							item += '-name="' + options.timeZone.name;
-						} else {
-							item += '-offset="' + options.timeZone.offset;
-						}
+						$.each( options.timeZone, function( key, value ) {
+							item += '[data-' + key + '="' + value + '"]';
+						} );
 					}
-
-					item += '"]';
 					timeOffset = options.timeZone.offset;
 					this.$timeZone.selectlist( 'selectBySelector', item );
 				} else if ( options.startDateTime ) {
@@ -6880,10 +7476,8 @@
 					} else {
 						temp = '+00:00';
 					}
-
 					timeOffset = ( temp === '+00:00' ) ? 'Z' : temp;
-
-					item += '-offset="' + temp + '"]';
+					item += '[data-offset="' + temp + '"]';
 					this.$timeZone.selectlist( 'selectBySelector', item );
 				} else {
 					timeOffset = 'Z';
@@ -6909,6 +7503,10 @@
 								item = 'daily';
 							}
 						}
+					} else if ( recur.FREQ === 'SECONDLY' ) {
+						item = 'secondly';
+					} else if ( recur.FREQ === 'MINUTELY' ) {
+						item = 'minutely';
 					} else if ( recur.FREQ === 'HOURLY' ) {
 						item = 'hourly';
 					} else if ( recur.FREQ === 'WEEKLY' ) {
@@ -6989,8 +7587,7 @@
 						var timeZone = this.$timeZone.selectlist( 'selectedItem' );
 						var timezoneOffset = ( timeZone.offset === '+00:00' ) ? 'Z' : timeZone.offset;
 
-						startDate = temp;
-						var utcEndHours = this.setUtcTime( startDate, startTime, timezoneOffset );
+						var utcEndHours = this.setUtcTime( temp, startTime, timezoneOffset );
 						this.$endDate.datepicker( 'setDate', utcEndHours );
 
 						this.$endSelect.selectlist( 'selectByValue', 'date' );
@@ -7013,7 +7610,7 @@
 				this.$startDate.datepicker( 'setDate', utcStartHours );
 			},
 
-			toggleState: function( action ) {
+			toggleState: function toggleState( action ) {
 				this.$element.find( '.combobox' ).combobox( action );
 				this.$element.find( '.datepicker' ).datepicker( action );
 				this.$element.find( '.selectlist' ).selectlist( action );
@@ -7029,7 +7626,7 @@
 				this.$element.find( '.repeat-days-of-the-week .btn-group' )[ action ]( 'disabled' );
 			},
 
-			value: function( options ) {
+			value: function value( options ) {
 				if ( options ) {
 					return this.setValue( options );
 				} else {
@@ -7041,7 +7638,7 @@
 
 		// SCHEDULER PLUGIN DEFINITION
 
-		$.fn.scheduler = function( option ) {
+		$.fn.scheduler = function scheduler( option ) {
 			var args = Array.prototype.slice.call( arguments, 1 );
 			var methodReturn;
 
@@ -7066,7 +7663,7 @@
 
 		$.fn.scheduler.Constructor = Scheduler;
 
-		$.fn.scheduler.noConflict = function() {
+		$.fn.scheduler.noConflict = function noConflict() {
 			$.fn.scheduler = old;
 			return this;
 		};
@@ -7087,6 +7684,287 @@
 				var $this = $( this );
 				if ( $this.data( 'scheduler' ) ) return;
 				$this.scheduler( $this.data() );
+			} );
+		} );
+
+
+
+	} )( jQuery );
+
+
+	( function( $ ) {
+
+		/*
+		 * Fuel UX Picker
+		 * https://github.com/ExactTarget/fuelux
+		 *
+		 * Copyright (c) 2014 ExactTarget
+		 * Licensed under the BSD New license.
+		 */
+
+
+
+		// -- BEGIN MODULE CODE HERE --
+
+		var old = $.fn.picker;
+
+		// PLACARD CONSTRUCTOR AND PROTOTYPE
+
+		var Picker = function Picker( element, options ) {
+			var self = this;
+			this.$element = $( element );
+			this.options = $.extend( {}, $.fn.picker.defaults, options );
+
+			this.$accept = this.$element.find( '.picker-accept' );
+			this.$cancel = this.$element.find( '.picker-cancel' );
+			this.$trigger = this.$element.find( '.picker-trigger' );
+			this.$footer = this.$element.find( '.picker-footer' );
+			this.$header = this.$element.find( '.picker-header' );
+			this.$popup = this.$element.find( '.picker-popup' );
+			this.$body = this.$element.find( '.picker-body' );
+
+			this.clickStamp = '_';
+
+			this.isInput = this.$trigger.is( 'input' );
+
+			this.$trigger.on( 'keydown.fu.picker', $.proxy( this.keyComplete, this ) );
+			this.$trigger.on( 'focus.fu.picker', $.proxy( function inputFocus( e ) {
+				if ( typeof e === "undefined" || $( e.target ).is( 'input[type=text]' ) ) {
+					$.proxy( this.show(), this );
+				}
+			}, this ) );
+			this.$trigger.on( 'click.fu.picker', $.proxy( function triggerClick( e ) {
+				if ( !$( e.target ).is( 'input[type=text]' ) ) {
+					$.proxy( this.toggle(), this );
+				} else {
+					$.proxy( this.show(), this );
+				}
+			}, this ) );
+			this.$accept.on( 'click.fu.picker', $.proxy( this.complete, this, 'accepted' ) );
+			this.$cancel.on( 'click.fu.picker', function( e ) {
+				e.preventDefault();
+				self.complete( 'cancelled' );
+			} );
+
+
+		};
+
+		var _isOffscreen = function _isOffscreen( picker ) {
+			var windowHeight = Math.max( document.documentElement.clientHeight, window.innerHeight || 0 );
+			var scrollTop = $( document ).scrollTop();
+			var popupTop = picker.$popup.offset();
+			var popupBottom = popupTop.top + picker.$popup.outerHeight( true );
+
+			//if the bottom of the popup goes off the page, but the top does not, dropup.
+			if ( popupBottom > windowHeight + scrollTop || popupTop.top < scrollTop ) {
+				return true;
+			} else { //otherwise, prefer showing the top of the popup only vs the bottom
+				return false;
+			}
+		};
+
+		var _display = function _display( picker ) {
+			picker.$popup.css( 'visibility', 'hidden' );
+
+			_showBelow( picker );
+
+			//if part of the popup is offscreen try to show it above
+			if ( _isOffscreen( picker ) ) {
+				_showAbove( picker );
+
+				//if part of the popup is still offscreen, prefer cutting off the bottom
+				if ( _isOffscreen( picker ) ) {
+					_showBelow( picker );
+				}
+			}
+
+			picker.$popup.css( 'visibility', 'visible' );
+		};
+
+		var _showAbove = function _showAbove( picker ) {
+			picker.$popup.css( 'top', -picker.$popup.outerHeight( true ) + 'px' );
+		};
+
+		var _showBelow = function _showBelow( picker ) {
+			picker.$popup.css( 'top', picker.$trigger.outerHeight( true ) + 'px' );
+		};
+
+		Picker.prototype = {
+			constructor: Picker,
+
+			complete: function complete( action ) {
+				var EVENT_CALLBACK_MAP = {
+					'accepted': 'onAccept',
+					'cancelled': 'onCancel',
+					'exited': 'onExit'
+				};
+				var func = this.options[ EVENT_CALLBACK_MAP[ action ] ];
+
+				var obj = {
+					contents: this.$body
+				};
+
+				if ( func ) {
+					func( obj );
+					this.$element.trigger( action + '.fu.picker', obj );
+				} else {
+					this.$element.trigger( action + '.fu.picker', obj );
+					this.hide();
+				}
+			},
+
+			keyComplete: function keyComplete( e ) {
+				if ( this.isInput && e.keyCode === 13 ) {
+					this.complete( 'accepted' );
+					this.$trigger.blur();
+				} else if ( e.keyCode === 27 ) {
+					this.complete( 'exited' );
+					this.$trigger.blur();
+				}
+			},
+
+			destroy: function destroy() {
+				this.$element.remove();
+				// remove any external bindings
+				$( document ).off( 'click.fu.picker.externalClick.' + this.clickStamp );
+				// empty elements to return to original markup
+				// [none]
+				// return string of markup
+				return this.$element[ 0 ].outerHTML;
+			},
+
+			disable: function disable() {
+				this.$element.addClass( 'disabled' );
+				this.$trigger.attr( 'disabled', 'disabled' );
+			},
+
+			enable: function enable() {
+				this.$element.removeClass( 'disabled' );
+				this.$trigger.removeAttr( 'disabled' );
+			},
+
+			toggle: function toggle() {
+				if ( this.$element.hasClass( 'showing' ) ) {
+					this.hide();
+				} else {
+					this.show();
+				}
+			},
+
+			hide: function hide() {
+				if ( !this.$element.hasClass( 'showing' ) ) {
+					return;
+				}
+
+				this.$element.removeClass( 'showing' );
+				$( document ).off( 'click.fu.picker.externalClick.' + this.clickStamp );
+				this.$element.trigger( 'hidden.fu.picker' );
+			},
+
+			externalClickListener: function externalClickListener( e, force ) {
+				if ( force === true || this.isExternalClick( e ) ) {
+					this.complete( 'exited' );
+				}
+			},
+
+			isExternalClick: function isExternalClick( e ) {
+				var el = this.$element.get( 0 );
+				var exceptions = this.options.externalClickExceptions || [];
+				var $originEl = $( e.target );
+				var i, l;
+
+				if ( e.target === el || $originEl.parents( '.picker:first' ).get( 0 ) === el ) {
+					return false;
+				} else {
+					for ( i = 0, l = exceptions.length; i < l; i++ ) {
+						if ( $originEl.is( exceptions[ i ] ) || $originEl.parents( exceptions[ i ] ).length > 0 ) {
+							return false;
+						}
+
+					}
+				}
+
+				return true;
+			},
+
+			show: function show() {
+				var other;
+
+				other = $( document ).find( '.picker.showing' );
+				if ( other.length > 0 ) {
+					if ( other.data( 'fu.picker' ) && other.data( 'fu.picker' ).options.explicit ) {
+						return;
+					}
+
+					other.picker( 'externalClickListener', {}, true );
+				}
+
+				this.$element.addClass( 'showing' );
+
+				_display( this );
+
+				this.$element.trigger( 'shown.fu.picker' );
+
+				this.clickStamp = new Date().getTime() + ( Math.floor( Math.random() * 100 ) + 1 );
+				if ( !this.options.explicit ) {
+					$( document ).on( 'click.fu.picker.externalClick.' + this.clickStamp, $.proxy( this.externalClickListener, this ) );
+				}
+			}
+		};
+
+		// PLACARD PLUGIN DEFINITION
+
+		$.fn.picker = function picker( option ) {
+			var args = Array.prototype.slice.call( arguments, 1 );
+			var methodReturn;
+
+			var $set = this.each( function() {
+				var $this = $( this );
+				var data = $this.data( 'fu.picker' );
+				var options = typeof option === 'object' && option;
+
+				if ( !data ) {
+					$this.data( 'fu.picker', ( data = new Picker( this, options ) ) );
+				}
+
+				if ( typeof option === 'string' ) {
+					methodReturn = data[ option ].apply( data, args );
+				}
+			} );
+
+			return ( methodReturn === undefined ) ? $set : methodReturn;
+		};
+
+		$.fn.picker.defaults = {
+			onAccept: undefined,
+			onCancel: undefined,
+			onExit: undefined,
+			externalClickExceptions: [],
+			explicit: false
+		};
+
+		$.fn.picker.Constructor = Picker;
+
+		$.fn.picker.noConflict = function noConflict() {
+			$.fn.picker = old;
+			return this;
+		};
+
+		// DATA-API
+
+		$( document ).on( 'focus.fu.picker.data-api', '[data-initialize=picker]', function( e ) {
+			var $control = $( e.target ).closest( '.picker' );
+			if ( !$control.data( 'fu.picker' ) ) {
+				$control.picker( $control.data() );
+			}
+		} );
+
+		// Must be domReady for AMD compatibility
+		$( function() {
+			$( '[data-initialize=picker]' ).each( function() {
+				var $this = $( this );
+				if ( $this.data( 'fu.picker' ) ) return;
+				$this.picker( $this.data() );
 			} );
 		} );
 

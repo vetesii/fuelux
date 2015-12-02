@@ -15,6 +15,9 @@
 	if (typeof define === 'function' && define.amd) {
 		// if AMD loader is available, register as an anonymous module.
 		define(['jquery'], factory);
+	} else if (typeof exports === 'object') {
+		// Node/CommonJS
+		module.exports = factory(require('jquery'));
 	} else {
 		// OR use browser globals if AMD is not present
 		factory(jQuery);
@@ -161,6 +164,7 @@
 		}
 	};
 
+	Checkbox.prototype.getValue = Checkbox.prototype.isChecked;
 
 	// CHECKBOX PLUGIN DEFINITION
 

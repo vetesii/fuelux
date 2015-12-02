@@ -1,11 +1,13 @@
 language: node_js
 node_js:
 - 0.1
+sudo: false
 before_install:
 - time wget http://fuelux-dev.herokuapp.com/dev/node_modules.tar.gz
 - time tar -zxf node_modules.tar.gz
 - chmod +x ./node_modules
 install:
+- time npm update
 - time ./node_modules/bower/bin/bower update
 env:
   global:

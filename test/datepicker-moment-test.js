@@ -4,7 +4,7 @@
 
 define(function(require){
 	var $ = require('jquery');
-	var html = require('text!test/markup/datepicker-markup.html');
+	var html = require('text!test/markup/datepicker-markup.html!strip');
 
 	require('bootstrap');
 	require('moment');
@@ -75,6 +75,32 @@ define(function(require){
 			equal(pickerDate.getTime(), futureDate, 'markup datepicker initialized with different date than now');
 		});
 
+		test('should handle 2 digit year', function(){
+			var $datepicker = $(html).datepicker();
+			var $datepickerInput = $datepicker.find('input');
+			var parsedAs;
+
+			$datepickerInput.val('01/01/68');
+			$datepickerInput.trigger('change');
+			parsedAs = $datepicker.datepicker('getFormattedDate');
+			equal(parsedAs, '01/01/2068', '01/01/68 parsed correctly');
+
+			$datepickerInput.val('1/1/68');
+			$datepickerInput.trigger('change');
+			parsedAs = $datepicker.datepicker('getFormattedDate');
+			equal(parsedAs, '01/01/2068', '1/1/68 parsed correctly');
+
+			$datepickerInput.val('1/1/69');
+			$datepickerInput.trigger('change');
+			parsedAs = $datepicker.datepicker('getFormattedDate');
+			equal(parsedAs, '01/01/1969', '1/1/69 parsed correctly');
+
+			$datepickerInput.val('01/01/69');
+			$datepickerInput.trigger('change');
+			parsedAs = $datepicker.datepicker('getFormattedDate');
+			equal(parsedAs, '01/01/1969', '01/01/69 parsed correctly');
+		});
+
 		test('should initialize with null date', function(){
 			var $datepicker = $(html).datepicker({ date: null });
 			var initializedDate = $datepicker.datepicker('getDate').toString();
@@ -92,6 +118,14 @@ define(function(require){
 			equal(date instanceof Date, true, 'returned a valid date object');
 			equal((date.getDate()===31 && date.getMonth()===2 && date.getFullYear()===1987), true, 'returned correct date');
 			equal(dateFormatted, '03/31/1987', 'returned correct formatted date');
+		});
+
+		test('should return date using getValue alias', function(){
+			var $datepicker = $(html).datepicker({ date: new Date(1987, 2, 31) });
+			var date1 = $datepicker.datepicker('getDate');
+			var date2 = $datepicker.datepicker('getValue');
+
+			equal(date1, date2, 'getValue alias matches getDate');
 		});
 
 		test('should set new date using setDate method', function(){
@@ -145,7 +179,7 @@ define(function(require){
 			});
 
 			$datepickerInput.val('03/31/1987');
-			$datepickerInput.trigger('blur');
+			$datepickerInput.trigger('change');
 
 			equal(called, 1, 'Event was triggered as expected');
 			equal(typeof event, 'object', 'Appropriate event object passed back as argument');
@@ -175,7 +209,7 @@ define(function(require){
 			equal($datepicker.find('.datepicker-wheels-year').hasClass('hidden'), true, 'years wheel hidden');
 
 			$datepickerInput.val('03/31/1988');
-			$datepickerInput.trigger('blur');
+			$datepickerInput.trigger('change');
 			dateString = $datepicker.datepicker('getDate').toString();
 			equal((dateString==='Invalid Date' || dateString==='NaN'), true, 'user can\t input date outside current year');
 		});
@@ -256,10 +290,19 @@ define(function(require){
 			});
 			var result4 = $datepicker4.datepicker('checkForMomentJS');
 
+			var $datepicker5 = $(html).datepicker({
+				momentConfig: {
+					culture: 'en',
+					formatCode: ''
+				}
+			});
+			var result5 = $datepicker5.datepicker('checkForMomentJS');
+
 			equal(result1, false, 'moment is not used because the option momentConfig.culture is null');
 			equal(result2, false, 'moment is not used because the option momentConfig.format is null');
 			equal(result3, false, 'moment is not used because the options momentConfig.culture and momentConfig.format are null');
 			equal(result4, true, 'moment is used because both momentConfig options are set');
+			equal(result5, true, 'moment is used because both momentConfig options are set, formatCode is empty');
 		});
 
 		test('should be initialized with different culture', function(){
@@ -340,7 +383,7 @@ define(function(require){
 			var formatted;
 
 			$datepickerInput.val(dateString);
-			$datepickerInput.trigger('blur');
+			$datepickerInput.trigger('change');
 			formatted = $datepicker.datepicker('getFormattedDate');
 
 			equal( formatted, dateString, 'moment.js formatted date should be equal to input');
@@ -375,7 +418,7 @@ define(function(require){
 			equal($datepicker.datepicker('getFormattedDate'), date, 'moment.js parsed date correctly after initialization with de culture');
 
 			$input.val('aa.bb.cccc');
-			$input.trigger('blur');
+			$input.trigger('change');
 			dateString = $datepicker.datepicker('getDate').toString();
 			equal((dateString==='Invalid Date' || dateString==='NaN'), true, 'datepicker should return \'Invalid Date\' or \'NaN\' when bad data is entered');
 		});

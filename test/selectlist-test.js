@@ -4,7 +4,7 @@
 
 define(function(require){
 	var $ = require('jquery');
-	var html = require('text!test/markup/selectlist-markup.html');
+	var html = require('text!test/markup/selectlist-markup.html!strip');
 	/* FOR DEV TESTING */
 	//var html = require('text!dev.html!strip');
 	html = $('<div>'+html+'</div>');
@@ -28,12 +28,14 @@ define(function(require){
 	test("should autosize correctly", function () {
 		var $selectlist8 = $('body').find('#MySelectlist8').selectlist();
 		var $selectlist9 = $('body').find('#MySelectlist9').selectlist();
-		var minWidth;
+		var $btn, minWidth;
 
 		//measure all children of selectlist to be tested (add them all to a span and see how wide the span is) and make sure the selectlist is actually big enough to fit that
+		$btn = $selectlist8.find('button.dropdown-toggle');
 		var $textLengthTester = $('<span id="textLengthTester" style="display:inline-block;"></span>').appendTo('body');
 		$selectlist8.find('li').each(function(index, element){
-			$('<p style="padding: 0 12px 0 28px;">' + $(element).text() + '</p>').appendTo($textLengthTester);
+			//set the p tag right/left padding to that of the selectlist button right/left padding
+			$('<p style="padding: 0 ' + $btn.css('padding-right') + ' 0 ' + $btn.css('padding-left') + ';">' + $(element).text() + '</p>').appendTo($textLengthTester);
 		});
 		minWidth = $textLengthTester.width();
 		ok(($selectlist8.width() >= minWidth), 'selectlist autoresized to ' + $selectlist8.width() + ' should be greater than ' + minWidth);
@@ -46,12 +48,24 @@ define(function(require){
 		$selectlist9.removeClass('hidden');
 
 		//measure all children of selectlist to be tested (add them all to a span and see how wide the span is) and make sure the selectlist is actually big enough to fit that
+		$btn = $selectlist9.find('button.dropdown-toggle');
 		$textLengthTester = $('<span id="textLengthTester" style="display:inline-block;"></span>').appendTo('body');
 		$selectlist9.find('li').each(function(index, element){
-			$('<p style="padding: 0 12px 0 28px;">' + $(element).text() + '</p>').appendTo($textLengthTester);
+			//set the p tag right/left padding to that of the selectlist button right/left padding
+			$('<p style="padding: 0 ' + $btn.css('padding-right') + ' 0 ' + $btn.css('padding-left') + ';">' + $(element).text() + '</p>').appendTo($textLengthTester);
 		});
 		minWidth = $textLengthTester.width();
 		ok(($selectlist9.width() >= minWidth), 'selectlist was hidden, now shown, sized ' + $selectlist9.width() + ' should be greater than ' + minWidth);
+	});
+
+	test("should disable itself if empty", function () {
+		var $selectlist = $(html).find('#selectlistEmpty').selectlist({
+			emptyLabelHTML: '<li data-value=""><a href="#">I am feeling so empty</a></li>'
+		});
+		equal($selectlist.find('.btn').hasClass('disabled'), true, 'element disabled');
+		equal($selectlist.find('.selected-label').html(), 'I am feeling so empty', 'custom emptyLabelHTML set as label');
+		equal($selectlist.selectlist('selectedItem').text, 'I am feeling so empty', 'selectedItem returns correct text');
+		equal($selectlist.selectlist('selectedItem').value, '', 'selectedItem returns correct value');
 	});
 
 	test("should set disabled state", function () {
@@ -90,6 +104,15 @@ define(function(require){
 		var item = $selectlist.selectlist('selectedItem');
 		var expectedItem = {selected: true, text: 'Two', value: 2 }; //weird
 		deepEqual(item, expectedItem, 'item selected');
+	});
+
+	test("should alias getValue", function () {
+		var $selectlist = $(html.find('#MySelectlist4').selectlist()); //.selectlist();
+		$selectlist.selectlist('selectByValue', 2);
+
+		var item1 = $selectlist.selectlist('selectedItem');
+		var item2 = $selectlist.selectlist('getValue');
+		deepEqual(item1, item2, 'getValue aliases selectedItem');
 	});
 
 	test("should select by value with whitespace", function () {
@@ -145,6 +168,26 @@ define(function(require){
 		equal(eventFired, true, 'change event fired');
 		equal(selectedText, 'One', 'text passed in from change event');
 		equal(selectedValue, 1, 'value passed in from change event');
+	});
+
+	test("should not fire changed event on disabled items", function () {
+		var eventFired = false;
+		var selectedText = '';
+		var selectedValue = '';
+
+		var $selectlist = $(html).find('#MySelectlist').selectlist().on('changed.fu.selectlist', function (evt, data) {
+			eventFired = true;
+			selectedText = data.text;
+			selectedValue = data.value;
+		});
+
+		// Disable menu item then simulate changed event
+		$selectlist.find('li:first').addClass('disabled')
+			.find('a').click();
+
+		equal(eventFired, false, 'changed event not fired');
+		equal(selectedText, '', 'text not changed');
+		equal(selectedValue, '', 'value not changed');
 	});
 
 	test("should destroy control", function () {

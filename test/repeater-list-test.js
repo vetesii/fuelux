@@ -55,7 +55,7 @@ define(function(require){
 
 		callback(resp);
 	};
-	var html = require('text!test/markup/repeater-markup.html');
+	var html = require('text!test/markup/repeater-markup.html!strip');
 	var noItems = false;
 
 	require('bootstrap');
@@ -67,8 +67,8 @@ define(function(require){
 			this.$markup = $(html);
 			this.$markup.find('.repeater-views').append('' +
 				'<label class="btn btn-default active">' +
-					'<input name="repeaterViews" type="radio" value="list">' +
-					'<span class="glyphicon glyphicon-list"></span>' +
+				'<input name="repeaterViews" type="radio" value="list">' +
+				'<span class="glyphicon glyphicon-list"></span>' +
 				'</label>');
 		}
 	});
@@ -157,7 +157,7 @@ define(function(require){
 
 		$repeater.on('loaded.fu.repeater', function(e, options){
 			count++;
-			
+
 			switch(count){
 				case 1:
 					$first = $repeater.find('.repeater-list thead .repeater-list-heading:first');
@@ -198,7 +198,7 @@ define(function(require){
 
 		$repeater.on('loaded.fu.repeater', function(){
 			count++;
-			
+
 			switch(count){
 				case 1:
 					$repeater.find('.repeater-list thead th:nth-child(1) .repeater-list-heading').click();
@@ -296,7 +296,7 @@ define(function(require){
 
 			$firstRow.click();
 			$lastRow.click();
-			
+
 			setTimeout(function(){
 				start();
 				$repeater.repeater('list_clearSelectedItems');
@@ -321,12 +321,14 @@ define(function(require){
 
 			$firstRow.click();
 			$lastRow.click();
-			
+
 			setTimeout(function(){
 				start();
 				selected = $repeater.repeater('list_getSelectedItems');
+				var getValue = $repeater.repeater('getValue');
 				equal(selected.length, 2, 'returned array contains appropriate number of items');
 				equal((typeof selected[0].data==='object' && selected[0].element.length>0), true, 'items in returned array contain appropriate object and attributes');
+				deepEqual(selected, getValue, 'getValue aliases selected');
 			}, 0);
 
 		});
@@ -345,15 +347,15 @@ define(function(require){
 
 			setTimeout(function(){
 				start();
-	
+
 				$repeater.repeater('list_setSelectedItems', [{ index: 0 }]);
 				equal($repeater.repeater('list_getSelectedItems').length, 1, 'correct number of items selected');
 				equal($items.find('tr:first').hasClass('selected'), true, 'correct row selected by index');
-	
+
 				$repeater.repeater('list_setSelectedItems', [{ property: 'commonName', value: 'pig' }]);
 				equal($repeater.repeater('list_getSelectedItems').length, 1, 'correct number of items selected');
 				equal($items.find('tr:nth-child(5)').hasClass('selected'), true, 'correct row selected by property/value');
-	
+
 				$repeater.repeater('list_setSelectedItems', [{ index: 0 }, { property: 'commonName', value: 'dog' }], true);
 				equal($repeater.repeater('list_getSelectedItems').length, 4, 'correct number of items selected when using force');
 			}, 0);
@@ -364,6 +366,74 @@ define(function(require){
 			dataSource: dataSource,
 			list_selectable: true
 		});
+	});
+
+	asyncTest('actions column should show up when enabled', function(){
+		var $repeater = $(this.$markup);
+		var repeaterOptions = {
+			dataSource: dataSource,
+			list_actions:  {
+				width: 37,
+				items: [
+					{
+						name: 'edit',
+						html: '<span class="glyphicon glyphicon-pencil"></span> Edit'
+					},
+					{
+						name: 'copy',
+						html: '<span class="glyphicon glyphicon-copy"></span> Copy'
+					},
+					{
+						name: 'delete',
+						html: '<span class="glyphicon glyphicon-trash"></span> Delete',
+						clickAction: function(helpers, callback, e) {
+							testClickAction(helpers, callback, e);
+							callback();
+						}
+					}
+				]
+			}
+		};
+
+		$repeater.one('loaded.fu.repeater', function(){
+			var $repeaterCanvas = $repeater.find('.repeater-canvas');
+			var $actionsTable = $repeater.find('table.table-actions');
+			var $firstActionRowBtn = $actionsTable.find('tbody tr:first button');
+			var $actionItem = $actionsTable.find('tbody tr:first li:last a');
+
+			$firstActionRowBtn.dropdown('toggle');
+
+			setTimeout(function(){
+				start();
+
+				equal($repeaterCanvas.hasClass('actions-enabled'), true, 'actions-enabled class added to repeater canvas');
+
+				equal($actionsTable.length !== 0 && $actionsTable.length === 1, true, 'Actions table was created and only one');
+
+				equal($repeater.find('.actions-column-wrapper').width() === repeaterOptions.list_actions.width, true, 'Actions table width set correctly');
+
+				ok($actionsTable.find('tbody tr:first-child .btn-group').hasClass('open'), 'Actions dropdown opens on click');
+
+				$actionItem.click();
+			}, 0);
+
+		});
+
+		function testClickAction(helpers, callback, e) {
+			equal((typeof helpers === 'object'), true, 'Items in row were returned after action click');
+			var count = 0;
+			for (var k in helpers.rowData) {
+				if (helpers.rowData.hasOwnProperty(k)) {
+					++count;
+				}
+			}
+			equal(count === 4, true, 'Full row object was returned');
+			equal((typeof callback === 'function'), true, 'callback is a function');
+			equal((typeof e === 'object'), true, 'e is an object');
+			equal((typeof e.target !== 'undefined'), true, 'e is probably a jQuery event object');
+		}
+
+		$repeater.repeater(repeaterOptions);
 	});
 
 });

@@ -15,6 +15,9 @@
 	if (typeof define === 'function' && define.amd) {
 		// if AMD loader is available, register as an anonymous module.
 		define(['jquery'], factory);
+	} else if (typeof exports === 'object') {
+		// Node/CommonJS
+		module.exports = factory(require('jquery'));
 	} else {
 		// OR use browser globals if AMD is not present
 		factory(jQuery);
@@ -84,15 +87,15 @@
 		},
 
 		setCheckedState: function(element, checked) {
-			// reset all items in group
-			this.resetGroup();
-
 			var $radio = element;
 			var $lbl = $radio.parent();
 			var containerSelector = $radio.attr('data-toggle');
 			var $containerToggle = $(containerSelector);
 
 			if(checked) {
+				// reset all items in group
+				this.resetGroup();
+
 				$radio.prop('checked', true);
 				$lbl.addClass('checked');
 				$containerToggle.removeClass('hide hidden');
@@ -160,6 +163,7 @@
 		}
 	};
 
+	Radio.prototype.getValue = Radio.prototype.isChecked;
 
 	// RADIO PLUGIN DEFINITION
 
